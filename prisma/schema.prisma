@@ -1,0 +1,216 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  admin
+  editor
+  viewer
+}
+
+enum ArtifactStatus {
+  draft
+  active
+  archived
+}
+
+enum RunStatus {
+  pending
+  running
+  passed
+  failed
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(viewer)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  projectAccesses UserProjectAccess[]
+}
+
+model Project {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  /// Jira project key (e.g. SCRUM) for creating issues; falls back to env JIRA_PROJECT_KEY
+  jiraProjectKey String?
+  /// Optional Epic issue key; new issues may be linked as children when Jira allows
+  jiraEpicKey    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  testCases  TestCase[]
+  checklists Checklist[]
+  testPlans  TestPlan[]
+  userAccesses UserProjectAccess[]
+}
+
+model UserProjectAccess {
+  userId    String
+  projectId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([userId, projectId])
+  @@index([projectId])
+}
+
+model TestCase {
+  id            String         @id @default(cuid())
+  projectId     String
+  title         String
+  description   String         @default("")
+  preconditions  String         @default("")
+  postconditions String         @default("")
+  expected       String         @default("")
+  status        ArtifactStatus @default(draft)
+  tags          String[]       @default([])
+  stepsJson     Json           @default("[]")
+  jiraIssueKey  String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  plans   TestPlanCase[]
+  runs    TestCaseRun[]
+
+  @@index([projectId])
+  @@index([status])
+  @@index([title])
+}
+
+model Checklist {
+  id        String         @id @default(cuid())
+  projectId String
+  title     String
+  itemsJson Json           @default("[]")
+  status    ArtifactStatus @default(draft)
+  tags      String[]       @default([])
+  jiraIssueKey String?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  plans   TestPlanChecklist[]
+  runs    ChecklistRun[]
+
+  @@index([projectId])
+  @@index([status])
+  @@index([title])
+}
+
+model TestPlan {
+  id        String         @id @default(cuid())
+  projectId String
+  title     String
+  objective String         @default("")
+  scope     String         @default("")
+  status    ArtifactStatus @default(draft)
+  tags      String[]       @default([])
+  jiraIssueKey String?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  cases   TestPlanCase[]
+  checklists TestPlanChecklist[]
+  runs    TestPlanRun[]
+
+  @@index([projectId])
+  @@index([status])
+  @@index([title])
+}
+
+model TestPlanChecklist {
+  testPlanId String
+  checklistId String
+  order      Int    @default(0)
+
+  testPlan TestPlan @relation(fields: [testPlanId], references: [id], onDelete: Cascade)
+  checklist Checklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+
+  @@id([testPlanId, checklistId])
+  @@index([checklistId])
+}
+
+model TestPlanCase {
+  testPlanId String
+  testCaseId String
+  order      Int    @default(0)
+
+  testPlan TestPlan @relation(fields: [testPlanId], references: [id], onDelete: Cascade)
+  testCase TestCase @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+
+  @@id([testPlanId, testCaseId])
+  @@index([testCaseId])
+}
+
+model TestCaseRun {
+  id           String     @id @default(cuid())
+  testCaseId   String
+  status       RunStatus  @default(pending)
+  actualResult String     @default("")
+  notes        String     @default("")
+  stepsJson    Json       @default("[]")
+  attachmentsJson Json     @default("[]")
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  testCase TestCase @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+
+  @@index([testCaseId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model ChecklistRun {
+  id           String     @id @default(cuid())
+  checklistId  String
+  status       RunStatus  @default(pending)
+  itemResults  Json       @default("[]")
+  notes        String     @default("")
+  attachmentsJson Json     @default("[]")
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  checklist Checklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+
+  @@index([checklistId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model TestPlanRun {
+  id          String     @id @default(cuid())
+  testPlanId  String
+  status      RunStatus  @default(pending)
+  summary     String     @default("")
+  detailsJson Json       @default("[]")
+  attachmentsJson Json     @default("[]")
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  testPlan TestPlan @relation(fields: [testPlanId], references: [id], onDelete: Cascade)
+
+  @@index([testPlanId])
+  @@index([status])
+  @@index([createdAt])
+}
