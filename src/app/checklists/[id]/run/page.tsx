@@ -10,7 +10,7 @@ import RunChecklistForm from "./RunChecklistForm";
 export const dynamic = "force-dynamic";
 
 export default async function RunChecklistPage({ params }: { params: { id: string } }) {
-  const session = requireRoleOrRedirect("viewer", `/checklists/${params.id}/run`);
+  const session = requireRoleOrRedirect("editor", `/checklists/${params.id}/run`);
   const locale = getServerLocale();
   const checklist = await prisma.checklist.findUnique({ where: { id: params.id } });
   if (!checklist) return notFound();

@@ -24,7 +24,7 @@ const RunSchema = z.object({
 });
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
-  const auth = apiRequireRole("viewer");
+  const auth = apiRequireRole("editor");
   if (!auth.ok) return NextResponse.json({ error: "Unauthorized" }, { status: auth.status });
 
   const testCase = await prisma.testCase.findUnique({ where: { id: params.id } });

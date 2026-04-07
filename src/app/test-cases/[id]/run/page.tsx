@@ -13,7 +13,7 @@ type Step = { step?: string; expectedResult?: string; actualResult?: string; sou
 export const dynamic = "force-dynamic";
 
 export default async function RunTestCasePage({ params }: { params: { id: string } }) {
-  const session = requireRoleOrRedirect("viewer", `/test-cases/${params.id}/run`);
+  const session = requireRoleOrRedirect("editor", `/test-cases/${params.id}/run`);
   const locale = getServerLocale();
   const tc = await prisma.testCase.findUnique({ where: { id: params.id } });
   if (!tc) return notFound();

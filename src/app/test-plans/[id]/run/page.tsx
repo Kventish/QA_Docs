@@ -44,7 +44,7 @@ type TestPlanRunData = {
 export const dynamic = "force-dynamic";
 
 export default async function RunTestPlanPage({ params }: { params: { id: string } }) {
-  const session = requireRoleOrRedirect("viewer", `/test-plans/${params.id}/run`);
+  const session = requireRoleOrRedirect("editor", `/test-plans/${params.id}/run`);
   const locale = getServerLocale();
   const plan = await (prisma as any).testPlan.findUnique({
     where: { id: params.id },

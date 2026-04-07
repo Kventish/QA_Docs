@@ -221,6 +221,48 @@ export async function POST(req: Request) {
 
   const runUrl = buildAbsolutePath(`/test-plans/${run.testPlan.id}/runs/${run.id}`);
   const planUrl = buildAbsolutePath(`/test-plans/${run.testPlan.id}`);
+  const details = (run.detailsJson as any) ?? null;
+  const includedCases = Array.isArray(details?.cases) ? details.cases : [];
+  const includedChecklists = Array.isArray(details?.checklists) ? details.checklists : [];
+
+  const failedCases = includedCases
+    .map((c: any) => {
+      const title = typeof c?.title === "string" ? c.title : c?.id;
+      const done = Array.isArray(c?.stepDone) ? (c.stepDone as boolean[]) : [];
+      if (!done.length) return null;
+      const failedIndexes = done.map((v, idx) => (!v ? idx : -1)).filter((idx) => idx >= 0);
+      if (!failedIndexes.length) return null;
+      const ok = done.filter(Boolean).length;
+      const total = done.length;
+      const firstFailed = failedIndexes[0] + 1;
+      return `- ${title} — шаг ${firstFailed} (прогресс ${ok}/${total})`;
+    })
+    .filter(Boolean) as string[];
+
+  const failedChecklists = includedChecklists
+    .map((c: any) => {
+      const title = typeof c?.title === "string" ? c.title : c?.id;
+      const done = Array.isArray(c?.itemDone) ? (c.itemDone as boolean[]) : [];
+      if (!done.length) return null;
+      const failedIndexes = done.map((v, idx) => (!v ? idx : -1)).filter((idx) => idx >= 0);
+      if (!failedIndexes.length) return null;
+      const ok = done.filter(Boolean).length;
+      const total = done.length;
+      const firstFailed = failedIndexes[0] + 1;
+      return `- ${title} — пункт ${firstFailed} (прогресс ${ok}/${total})`;
+    })
+    .filter(Boolean) as string[];
+
+  const failedBlock =
+    failedCases.length || failedChecklists.length
+      ? [
+          "Провалено:",
+          failedCases.length ? ["Тест-кейсы:", ...failedCases].join("\n") : "",
+          failedChecklists.length ? ["Чек-листы:", ...failedChecklists].join("\n") : ""
+        ]
+          .filter(Boolean)
+          .join("\n")
+      : "";
   const lines = [
     `Источник: qa-docs · прогон тест-плана`,
     `Тест-план: ${run.testPlan.title}`,
@@ -228,7 +270,8 @@ export async function POST(req: Request) {
     `Ссылка на тест-план: ${planUrl}`,
     "",
     `Статус: ${run.status}`,
-    run.summary ? `Сводка:\n${run.summary}` : ""
+    run.summary ? `Сводка:\n${run.summary}` : "",
+    failedBlock
   ].filter(Boolean);
 
   const created = await jiraCreateIssue({

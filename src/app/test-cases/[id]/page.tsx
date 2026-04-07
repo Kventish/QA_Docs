@@ -41,12 +41,14 @@ export default async function TestCaseViewPage({ params }: { params: { id: strin
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link
-            className="rounded-lg border bg-surface-2 px-3 py-2 text-sm font-medium hover:bg-surface-1"
-            href={`/test-cases/${tc.id}/run`}
-          >
-            {t("common.startRun", { locale })}
-          </Link>
+          {canEdit ? (
+            <Link
+              className="rounded-lg border bg-surface-2 px-3 py-2 text-sm font-medium hover:bg-surface-1"
+              href={`/test-cases/${tc.id}/run`}
+            >
+              {t("common.startRun", { locale })}
+            </Link>
+          ) : null}
           <Link
             className="rounded-lg border bg-surface-2 px-3 py-2 text-sm font-medium hover:bg-surface-1"
             href={`/test-cases/${tc.id}/runs`}
