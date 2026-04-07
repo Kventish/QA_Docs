@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useT } from "@/lib/i18n/useT";
+import { showToast } from "@/components/toast/ToastCenter";
 
 type Entity = "testCase" | "testPlan" | "checklist";
 
@@ -19,10 +20,8 @@ export default function JiraIssueActions(props: {
   const t = useT();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   async function createIssue() {
-    setError(null);
     setLoading(true);
     try {
       const res = await fetch("/api/jira/issues", {
@@ -37,19 +36,19 @@ export default function JiraIssueActions(props: {
         return;
       }
       if (res.status === 409) {
-        setError(json?.error ?? t("jira.alreadyLinked"));
+        showToast({ type: "error", message: json?.error ?? t("jira.alreadyLinked") });
         setLoading(false);
         router.refresh();
         return;
       }
       if (!res.ok) {
-        setError(json?.error ?? t("jira.createFailed"));
+        showToast({ type: "error", message: json?.error ?? t("jira.createFailed") });
         setLoading(false);
         return;
       }
       router.refresh();
     } catch {
-      setError(t("jira.createFailed"));
+      showToast({ type: "error", message: t("jira.createFailed") });
     } finally {
       setLoading(false);
     }
@@ -99,7 +98,6 @@ export default function JiraIssueActions(props: {
       >
         {loading ? t("common.loading") : t("jira.createInJira")}
       </button>
-      {error ? <p className="text-xs text-red-400">{error}</p> : null}
     </div>
   );
 }

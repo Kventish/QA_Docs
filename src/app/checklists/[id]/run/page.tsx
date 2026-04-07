@@ -6,7 +6,6 @@ import { canAccessProject } from "@/lib/project-access";
 import { getServerLocale } from "@/lib/i18n/getServerLocale";
 import { t } from "@/lib/i18n/t";
 import RunChecklistForm from "./RunChecklistForm";
-import CopyPageLinkButton from "@/components/CopyPageLinkButton";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +26,6 @@ export default async function RunChecklistPage({ params }: { params: { id: strin
           <div className="mt-2 text-sm text-text-muted">{t("checklists.run.description", { locale })}</div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <CopyPageLinkButton path={`/checklists/${params.id}/run`} />
           <Link
             className="rounded-lg border bg-surface-2 px-3 py-2 text-sm font-medium hover:bg-surface-1"
             href={`/checklists/${params.id}`}

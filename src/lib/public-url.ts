@@ -9,5 +9,8 @@ export function normalizePublicBaseUrl(raw: string | undefined): string {
 }
 
 export function getPublicBaseUrlFromEnv(): string {
-  return normalizePublicBaseUrl(process.env.NEXT_PUBLIC_APP_URL);
+  const fromEnv = normalizePublicBaseUrl(process.env.NEXT_PUBLIC_APP_URL);
+  if (fromEnv) return fromEnv;
+  // Dev fallback: make Jira links fully qualified.
+  return "http://localhost:3000";
 }

@@ -69,6 +69,11 @@ export default function RunChecklistForm({ id, title, items }: Props) {
       return;
     }
 
+    const runId = json?.run?.id as string | undefined;
+    if (runId) {
+      window.location.assign(`/checklists/${id}/runs/${runId}`);
+      return;
+    }
     setMessage(t("checklists.run.success", { locale }));
     setSaving(false);
   }

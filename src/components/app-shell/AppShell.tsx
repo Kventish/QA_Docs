@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, notifyLocaleChanged, useT } from "@/lib/i18n/useT";
+import ToastCenter from "@/components/toast/ToastCenter";
 
 type SearchResult = {
   testCases: { id: string; title: string }[];
@@ -119,30 +120,28 @@ export function AppShell({ children }: { children: ReactNode }) {
 
     // Retry a few times after navigation/login: some browsers delay cookie availability after redirects.
     let tries = 0;
-    const t = window.setInterval(() => {
+    const intervalId = window.setInterval(() => {
       if (!alive) return;
-      if (session) {
-        window.clearInterval(t);
-        return;
-      }
       tries += 1;
       loadSession().then((s) => {
         if (!alive) return;
         if (s) {
           setSession(s);
-          window.clearInterval(t);
+          window.clearInterval(intervalId);
         }
       });
-      if (tries >= 5) window.clearInterval(t);
+      if (tries >= 5) window.clearInterval(intervalId);
     }, 700);
 
     return () => {
       alive = false;
+      window.clearInterval(intervalId);
     };
   }, [pathname]);
 
   return (
     <div className="min-h-screen">
+      <ToastCenter />
       <div className="flex min-h-screen">
         <aside className="fixed left-0 top-0 hidden h-screen w-64 shrink-0 border-r bg-surface-1 md:block">
           <div className="flex h-full flex-col overflow-y-auto px-5 py-4">

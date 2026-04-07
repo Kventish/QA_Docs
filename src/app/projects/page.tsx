@@ -170,10 +170,9 @@ export default function ProjectsPage() {
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
         {projects.map((p) => (
           <div key={p.id} className="rounded-xl border bg-surface-1 p-4">
-            <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
-                <div className="text-sm text-text-muted">{p.slug}</div>
-                <div className="mt-1 truncate font-medium">{p.name}</div>
+                <div className="truncate font-medium">{p.name}</div>
               </div>
               {isAdmin && (
                 <button

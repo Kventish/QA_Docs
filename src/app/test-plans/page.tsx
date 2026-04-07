@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useLocale, useT } from "@/lib/i18n/useT";
+import { ProjectFilterSelect } from "@/components/ProjectSelect";
 
 type TestPlan = {
   id: string;
@@ -113,15 +114,12 @@ export default function TestPlansPage() {
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h1 className="text-xl font-semibold">{t("testPlans.title")}</h1>
         <div className="flex items-center gap-2">
-          <select
-            className="rounded-lg border bg-surface-2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          <ProjectFilterSelect
+            projects={projects}
             value={projectId}
-            onChange={(e) => setProjectId(e.target.value)}
-          >
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
+            onChange={setProjectId}
+            className="rounded-lg border bg-surface-2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
           {canEdit && (
             <Link
               className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium hover:bg-brand-500"
@@ -181,16 +179,23 @@ export default function TestPlansPage() {
                 )}
               </tr>
             ))}
-            {!loading && items.length === 0 ? (
+            {!loading && projects.length === 0 ? (
               <tr>
-                <td className="px-4 py-6 text-text-muted" colSpan={4}>
+                <td className="px-4 py-6 text-text-muted" colSpan={canEdit ? 5 : 4}>
+                  {t("common.noProjectsTableHint")}
+                </td>
+              </tr>
+            ) : null}
+            {!loading && projects.length > 0 && items.length === 0 ? (
+              <tr>
+                <td className="px-4 py-6 text-text-muted" colSpan={canEdit ? 5 : 4}>
                   {t("testPlans.empty")}
                 </td>
               </tr>
             ) : null}
             {loading ? (
               <tr>
-                <td className="px-4 py-6 text-text-muted" colSpan={4}>
+                <td className="px-4 py-6 text-text-muted" colSpan={canEdit ? 5 : 4}>
                   {t("common.loading")}
                 </td>
               </tr>

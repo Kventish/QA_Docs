@@ -6,9 +6,6 @@ import { canAccessProject } from "@/lib/project-access";
 import { getServerLocale } from "@/lib/i18n/getServerLocale";
 import { t } from "@/lib/i18n/t";
 import ChecklistItems from "./checklist-items";
-import CopyPageLinkButton from "@/components/CopyPageLinkButton";
-import JiraIssueActions from "@/components/JiraIssueActions";
-import { getJiraConfig, jiraBrowseUrl } from "@/lib/jira";
 
 export const dynamic = "force-dynamic";
 
@@ -23,10 +20,6 @@ export default async function ChecklistViewPage({ params }: { params: { id: stri
 
   const items = (cl.itemsJson as unknown as Item[]) ?? [];
   const canEdit = session.role === "editor" || session.role === "admin";
-
-  const jiraCfg = getJiraConfig();
-  const jiraBrowse =
-    cl.jiraIssueKey && jiraCfg ? jiraBrowseUrl(jiraCfg.baseUrl, cl.jiraIssueKey) : null;
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
@@ -44,7 +37,6 @@ export default async function ChecklistViewPage({ params }: { params: { id: stri
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <CopyPageLinkButton path={`/checklists/${cl.id}`} />
           <Link
             className="rounded-lg border bg-surface-2 px-3 py-2 text-sm font-medium hover:bg-surface-1"
             href={`/checklists/${cl.id}/run`}
@@ -67,20 +59,6 @@ export default async function ChecklistViewPage({ params }: { params: { id: stri
           )}
         </div>
       </div>
-
-      <section className="rounded-xl border bg-surface-1 p-4">
-        <div className="text-sm font-medium">{t("jira.sectionTitle", { locale })}</div>
-        <div className="mt-2">
-          <JiraIssueActions
-            entity="checklist"
-            entityId={cl.id}
-            issueKey={cl.jiraIssueKey}
-            browseUrl={jiraBrowse}
-            canEdit={canEdit}
-            jiraConfigured={!!jiraCfg}
-          />
-        </div>
-      </section>
 
       <section className="rounded-xl border bg-surface-1 p-6">
         <div className="text-sm font-medium">{t("checklists.itemsLabel", { locale })}</div>

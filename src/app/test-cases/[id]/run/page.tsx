@@ -6,7 +6,6 @@ import { canAccessProject } from "@/lib/project-access";
 import { getServerLocale } from "@/lib/i18n/getServerLocale";
 import { t } from "@/lib/i18n/t";
 import RunTestCaseForm from "./RunTestCaseForm";
-import CopyPageLinkButton from "@/components/CopyPageLinkButton";
 import { flattenTestCaseSteps } from "@/lib/test-case-includes";
 
 type Step = { step?: string; expectedResult?: string; actualResult?: string; sourceTitle?: string };
@@ -36,7 +35,6 @@ export default async function RunTestCasePage({ params }: { params: { id: string
           <div className="mt-2 text-sm text-text-muted">{t("testCases.run.description", { locale })}</div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <CopyPageLinkButton path={`/test-cases/${params.id}/run`} />
           <Link
             className="rounded-lg border bg-surface-2 px-3 py-2 text-sm font-medium hover:bg-surface-1"
             href={`/test-cases/${params.id}`}

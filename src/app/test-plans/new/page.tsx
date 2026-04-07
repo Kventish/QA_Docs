@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useT, useLocale } from "@/lib/i18n/useT";
+import { ProjectFormSelect } from "@/components/ProjectSelect";
 
 type TestCaseLite = { id: string; title: string; status: string; tags: string[] };
 type ChecklistLite = { id: string; title: string; status: string };
@@ -122,16 +123,17 @@ export default function NewTestPlanPage() {
             <label className="text-sm text-text-muted">
               {t("testPlans.form.project")} <span className="text-red-400">*</span>
             </label>
-            <select
-              className={`w-full rounded-lg border bg-surface-2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 ${fieldErrors.projectId ? "border-red-500" : ""}`}
+            <ProjectFormSelect
+              projects={projects}
               value={projectId}
-              onChange={(e) => { setProjectId(e.target.value); setSelected({}); setSelectedChecklists({}); setFieldErrors((e) => ({ ...e, projectId: "" })); }}
-            >
-              <option value="">{t("validation.projectRequired")}</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
+              onChange={(id) => {
+                setProjectId(id);
+                setSelected({});
+                setSelectedChecklists({});
+                setFieldErrors((prev) => ({ ...prev, projectId: "" }));
+              }}
+              className={`w-full rounded-lg border bg-surface-2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 ${fieldErrors.projectId ? "border-red-500" : ""}`}
+            />
             {fieldErrors.projectId ? (
               <p className="text-xs text-red-400">{fieldErrors.projectId}</p>
             ) : null}
@@ -196,24 +198,29 @@ export default function NewTestPlanPage() {
           </div>
 
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="text-sm text-text-muted">{t("testPlans.form.includeTestCases")}</div>
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-text-muted">{selectedIds.length} {t("testPlans.form.selected")}</span>
-                <button
-                  type="button"
-                  className="rounded-lg border bg-surface-2 px-3 py-1 text-xs font-medium hover:bg-surface-1"
-                  onClick={() => setSelected(cases.reduce((acc, item) => ({ ...acc, [item.id]: true }), {} as Record<string, boolean>))}
-                >
-                  {t("common.selectAll")}
-                </button>
-                <button
-                  type="button"
-                  className="rounded-lg border bg-surface-2 px-3 py-1 text-xs font-medium hover:bg-surface-1"
-                  onClick={() => setSelected({})}
-                >
-                  {t("common.clearAll")}
-                </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-text-muted">
+                  {selectedIds.length} {t("testPlans.form.selected")}
+                </span>
+                <div className="inline-flex overflow-hidden rounded-lg border bg-surface-2">
+                  <button
+                    type="button"
+                    className="px-3 py-1 text-xs font-medium hover:bg-surface-1"
+                    onClick={() => setSelected(cases.reduce((acc, item) => ({ ...acc, [item.id]: true }), {} as Record<string, boolean>))}
+                  >
+                    {t("common.selectAll")}
+                  </button>
+                  <div className="w-px bg-border" />
+                  <button
+                    type="button"
+                    className="px-3 py-1 text-xs font-medium hover:bg-surface-1"
+                    onClick={() => setSelected({})}
+                  >
+                    {t("common.clearAll")}
+                  </button>
+                </div>
               </div>
             </div>
             <div className="max-h-[320px] overflow-auto rounded-xl border bg-surface-2">
@@ -258,24 +265,29 @@ export default function NewTestPlanPage() {
           </div>
 
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="text-sm text-text-muted">{t("testPlans.form.includeChecklists")}</div>
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-text-muted">{selectedChecklistIds.length} {t("testPlans.form.selected")}</span>
-                <button
-                  type="button"
-                  className="rounded-lg border bg-surface-2 px-3 py-1 text-xs font-medium hover:bg-surface-1"
-                  onClick={() => setSelectedChecklists(checklists.reduce((acc, item) => ({ ...acc, [item.id]: true }), {} as Record<string, boolean>))}
-                >
-                  {t("common.selectAll")}
-                </button>
-                <button
-                  type="button"
-                  className="rounded-lg border bg-surface-2 px-3 py-1 text-xs font-medium hover:bg-surface-1"
-                  onClick={() => setSelectedChecklists({})}
-                >
-                  {t("common.clearAll")}
-                </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-text-muted">
+                  {selectedChecklistIds.length} {t("testPlans.form.selected")}
+                </span>
+                <div className="inline-flex overflow-hidden rounded-lg border bg-surface-2">
+                  <button
+                    type="button"
+                    className="px-3 py-1 text-xs font-medium hover:bg-surface-1"
+                    onClick={() => setSelectedChecklists(checklists.reduce((acc, item) => ({ ...acc, [item.id]: true }), {} as Record<string, boolean>))}
+                  >
+                    {t("common.selectAll")}
+                  </button>
+                  <div className="w-px bg-border" />
+                  <button
+                    type="button"
+                    className="px-3 py-1 text-xs font-medium hover:bg-surface-1"
+                    onClick={() => setSelectedChecklists({})}
+                  >
+                    {t("common.clearAll")}
+                  </button>
+                </div>
               </div>
             </div>
             <div className="max-h-[320px] overflow-auto rounded-xl border bg-surface-2">

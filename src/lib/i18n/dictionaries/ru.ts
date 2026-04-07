@@ -28,12 +28,17 @@ export const ru = {
     form: {
       no: "№"
     },
+    selectAll: "Выбрать всё",
+    clearAll: "Очистить всё",
     edit: "Редактировать",
     password: "Пароль",
     email: "Email",
     copyLink: "Копировать ссылку",
     linkCopied: "Ссылка скопирована",
-    copyLinkFailed: "Не удалось скопировать ссылку"
+    copyLinkFailed: "Не удалось скопировать ссылку",
+    noProjects: "Нет проектов",
+    filtersNeedProject: "Сначала создайте проект…",
+    noProjectsTableHint: "Нет проектов. Создайте проект в разделе «Проекты»."
   },
   jira: {
     sectionTitle: "Jira",
@@ -130,6 +135,7 @@ export const ru = {
     noIncludedChecklists: "Чек-листы не включены.",
     createdAt: "Дата",
     attachments: "Вложения",
+    jira: "Jira",
     sectionSteps: "Шаги прогона",
     sectionAttachments: "Вложения к прогону",
     sectionChecklistItems: "Пункты прогона",
@@ -352,7 +358,8 @@ export const ru = {
       fail: "Провален"
     },
     deleteConfirm: "Удалить тест‑план?",
-    selectProject: "— Выберите проект —",    form: {
+    selectProject: "— Выберите проект —",
+    form: {
       project: "Проект",
       title: "Название",
       titlePlaceholder: "например: Release 1.12 regression",

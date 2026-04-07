@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useT } from "@/lib/i18n/useT";
+import { ProjectFormSelect } from "@/components/ProjectSelect";
 
 type Item = { text: string; checked: boolean; expectedResult: string };
 type Checklist = {
@@ -161,21 +162,16 @@ export default function EditChecklistPage({ params }: { params: { id: string } }
           <div className="grid gap-3 md:grid-cols-2">
             <div className="space-y-1">
               <label className="text-sm text-text-muted">Project <span className="text-red-400">*</span></label>
-              <select
-                className={`w-full rounded-lg border bg-surface-2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 ${fieldErrors.projectId ? "border-red-500" : ""}`}
+              <ProjectFormSelect
+                projects={projects}
                 value={projectId}
-                onChange={(e) => {
-                  setProjectId(e.target.value);
+                onChange={(id) => {
+                  setProjectId(id);
                   setFieldErrors((prev) => ({ ...prev, projectId: "" }));
                 }}
-              >
-                <option value="">— Выберите проект —</option>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
+                firstOptionKey="testPlans.selectProject"
+                className={`w-full rounded-lg border bg-surface-2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 ${fieldErrors.projectId ? "border-red-500" : ""}`}
+              />
               {fieldErrors.projectId ? <p className="text-xs text-red-400">{fieldErrors.projectId}</p> : null}
             </div>
             <div className="space-y-1">

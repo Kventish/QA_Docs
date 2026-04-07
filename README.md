@@ -24,14 +24,23 @@ Self-hosted портал для QA‑документации: **тест‑ке
 docker compose up -d --build
 ```
 
-3) Примените миграции и создайте admin + default project:
+3) Миграции применяются **автоматически** при старте контейнера (`prisma migrate deploy` в `docker-entrypoint.sh`). Дождитесь строки `Ready` в логах: `docker compose logs -f app`.
+
+4) Создайте admin + default project (один раз):
 
 ```bash
-docker compose exec app npx prisma migrate dev --name init
 docker compose exec app npm run db:seed
 ```
 
-4) Откройте приложение:
+Если нужно вручную применить миграции без перезапуска:
+
+```bash
+docker compose exec app npx prisma migrate deploy
+```
+
+Для **новой** миграции в контейнере используйте `migrate dev` (после пересборки образа права на `/app` позволяют `prisma generate` без ошибки `EACCES`).
+
+5) Откройте приложение:
 
 - `http://localhost:3000`
 

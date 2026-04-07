@@ -6,7 +6,6 @@ import { canAccessProject } from "@/lib/project-access";
 import { getServerLocale } from "@/lib/i18n/getServerLocale";
 import { t } from "@/lib/i18n/t";
 import RunHistoryTable from "@/components/run-history/RunHistoryTable";
-import CopyPageLinkButton from "@/components/CopyPageLinkButton";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +23,7 @@ type TestPlanRunHistory = {
     id: string;
     status: string;
     summary: string;
+    detailsJson?: any;
     attachmentsJson?: Array<{ name: string; url: string }>;
     createdAt: Date;
   }>;
@@ -48,7 +48,6 @@ export default async function TestPlanRunHistoryPage({ params }: { params: { id:
           <div className="mt-2 text-sm text-text-muted">{t("runHistory.descriptionTestPlan", { locale })}</div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <CopyPageLinkButton path={`/test-plans/${plan.id}/runs`} />
           <Link
             className="rounded-lg border bg-surface-2 px-3 py-2 text-sm font-medium hover:bg-surface-1"
             href={`/test-plans/${plan.id}`}
@@ -67,15 +66,29 @@ export default async function TestPlanRunHistoryPage({ params }: { params: { id:
       <RunHistoryTable
         locale={locale}
         emptyLabel={t("runHistory.empty", { locale })}
-        runs={plan.runs.map((run) => ({
-          id: run.id,
-          status: run.status,
-          detail: run.summary || t("testPlans.emptyText", { locale }),
-          notes: "",
-          attachments: (run.attachmentsJson as any) ?? [],
-          detailUrl: `/test-plans/${plan.id}/runs/${run.id}`,
-          createdAt: run.createdAt
-        }))}
+        runs={plan.runs.map((run) => {
+          const details = run.detailsJson as any;
+          const cases = Array.isArray(details?.cases) ? details.cases : [];
+          const checklists = Array.isArray(details?.checklists) ? details.checklists : [];
+          const caseDone = cases.reduce((acc: number, c: any) => acc + (Array.isArray(c.stepDone) ? c.stepDone.filter(Boolean).length : 0), 0);
+          const caseTotal = cases.reduce((acc: number, c: any) => acc + (Array.isArray(c.stepDone) ? c.stepDone.length : 0), 0);
+          const clDone = checklists.reduce((acc: number, c: any) => acc + (Array.isArray(c.itemDone) ? c.itemDone.filter(Boolean).length : 0), 0);
+          const clTotal = checklists.reduce((acc: number, c: any) => acc + (Array.isArray(c.itemDone) ? c.itemDone.length : 0), 0);
+          const progress =
+            caseTotal || clTotal
+              ? `${caseDone}/${caseTotal} • ${clDone}/${clTotal}`
+              : "";
+
+          return {
+            id: run.id,
+            status: run.status,
+            detail: [run.summary || t("testPlans.emptyText", { locale }), progress].filter(Boolean).join("\n"),
+            notes: "",
+            attachments: (run.attachmentsJson as any) ?? [],
+            detailUrl: `/test-plans/${plan.id}/runs/${run.id}`,
+            createdAt: run.createdAt
+          };
+        })}
       />
     </div>
   );

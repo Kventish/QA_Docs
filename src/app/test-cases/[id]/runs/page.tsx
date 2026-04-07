@@ -6,7 +6,6 @@ import { canAccessProject } from "@/lib/project-access";
 import { getServerLocale } from "@/lib/i18n/getServerLocale";
 import { t } from "@/lib/i18n/t";
 import RunHistoryTable from "@/components/run-history/RunHistoryTable";
-import CopyPageLinkButton from "@/components/CopyPageLinkButton";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +50,6 @@ export default async function TestCaseRunHistoryPage({ params }: { params: { id:
           <div className="mt-2 text-sm text-text-muted">{t("runHistory.descriptionTestCase", { locale })}</div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <CopyPageLinkButton path={`/test-cases/${tc.id}/runs`} />
           <Link
             className="rounded-lg border bg-surface-2 px-3 py-2 text-sm font-medium hover:bg-surface-1"
             href={`/test-cases/${tc.id}`}

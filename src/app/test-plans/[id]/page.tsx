@@ -5,9 +5,6 @@ import { requireRoleOrRedirect } from "@/lib/rbac-server";
 import { canAccessProject } from "@/lib/project-access";
 import { getServerLocale } from "@/lib/i18n/getServerLocale";
 import { t } from "@/lib/i18n/t";
-import CopyPageLinkButton from "@/components/CopyPageLinkButton";
-import JiraIssueActions from "@/components/JiraIssueActions";
-import { getJiraConfig, jiraBrowseUrl } from "@/lib/jira";
 
 export const dynamic = "force-dynamic";
 
@@ -26,10 +23,6 @@ export default async function TestPlanViewPage({ params }: { params: { id: strin
 
   const canEdit = session.role === "editor" || session.role === "admin";
 
-  const jiraCfg = getJiraConfig();
-  const jiraBrowse =
-    plan.jiraIssueKey && jiraCfg ? jiraBrowseUrl(jiraCfg.baseUrl, plan.jiraIssueKey) : null;
-
   return (
     <div className="mx-auto max-w-4xl space-y-4">
       <div className="flex items-start justify-between gap-3">
@@ -46,7 +39,6 @@ export default async function TestPlanViewPage({ params }: { params: { id: strin
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <CopyPageLinkButton path={`/test-plans/${plan.id}`} />
           <Link
             className="rounded-lg border bg-surface-2 px-3 py-2 text-sm font-medium hover:bg-surface-1"
             href={`/test-plans/${plan.id}/run`}
@@ -69,20 +61,6 @@ export default async function TestPlanViewPage({ params }: { params: { id: strin
           )}
         </div>
       </div>
-
-      <section className="rounded-xl border bg-surface-1 p-4">
-        <div className="text-sm font-medium">{t("jira.sectionTitle", { locale })}</div>
-        <div className="mt-2">
-          <JiraIssueActions
-            entity="testPlan"
-            entityId={plan.id}
-            issueKey={plan.jiraIssueKey}
-            browseUrl={jiraBrowse}
-            canEdit={canEdit}
-            jiraConfigured={!!jiraCfg}
-          />
-        </div>
-      </section>
 
       <div className="grid gap-4 md:grid-cols-2">
         <section className="rounded-xl border bg-surface-1 p-6">

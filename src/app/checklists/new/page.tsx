@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useLocale, useT } from "@/lib/i18n/useT";
+import { ProjectFormSelect } from "@/components/ProjectSelect";
 
 type Item = { text: string; checked: boolean; expectedResult: string };
 type Project = { id: string; name: string; slug: string };
@@ -98,16 +99,15 @@ export default function NewChecklistPage() {
             <label className="text-sm text-text-muted">
               {t("checklists.form.project")} <span className="text-red-400">*</span>
             </label>
-            <select
-              className={`w-full rounded-lg border bg-surface-2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 ${fieldErrors.projectId ? "border-red-500" : ""}`}
+            <ProjectFormSelect
+              projects={projects}
               value={projectId}
-              onChange={(e) => { setProjectId(e.target.value); setFieldErrors((e) => ({ ...e, projectId: "" })); }}
-            >
-              <option value="">{t("validation.projectRequired")}</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
+              onChange={(id) => {
+                setProjectId(id);
+                setFieldErrors((prev) => ({ ...prev, projectId: "" }));
+              }}
+              className={`w-full rounded-lg border bg-surface-2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 ${fieldErrors.projectId ? "border-red-500" : ""}`}
+            />
             {fieldErrors.projectId ? (
               <p className="text-xs text-red-400">{fieldErrors.projectId}</p>
             ) : null}

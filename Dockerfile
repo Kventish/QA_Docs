@@ -25,7 +25,9 @@ COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/public ./public
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
-RUN mkdir -p /app/public/uploads && chown -R app:app /app/public/uploads
+RUN mkdir -p /app/public/uploads
+# node_modules и прочее от COPY принадлежат root — без chown `app` не может писать в .prisma (migrate dev / prisma generate в exec)
+RUN chown -R app:app /app
 
 USER app
 EXPOSE 3000

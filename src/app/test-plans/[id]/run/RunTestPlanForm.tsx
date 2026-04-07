@@ -78,6 +78,19 @@ export default function RunTestPlanForm({ id, title, objective, scope, cases, ch
     const formData = new FormData();
     formData.append("status", status);
     formData.append("summary", summary);
+    formData.append(
+      "caseStepResults",
+      JSON.stringify(cases.map((c, idx) => ({ testCaseId: c.id, done: caseStepDone[idx] ?? [] })))
+    );
+    formData.append(
+      "checklistItemResults",
+      JSON.stringify(
+        checklists.map((c, idx) => ({
+          checklistId: c.id,
+          done: checklistItemDone[idx] ?? []
+        }))
+      )
+    );
     attachments.forEach((file) => formData.append("attachments", file));
 
     const res = await fetch(`/api/test-plans/${id}/run`, {
@@ -98,6 +111,11 @@ export default function RunTestPlanForm({ id, title, objective, scope, cases, ch
       return;
     }
 
+    const runId = json?.run?.id as string | undefined;
+    if (runId) {
+      window.location.assign(`/test-plans/${id}/runs/${runId}`);
+      return;
+    }
     setMessage(t("testPlans.run.success", { locale }));
     setSaving(false);
   }

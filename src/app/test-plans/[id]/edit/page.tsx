@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useT } from "@/lib/i18n/useT";
+import { ProjectFormSelect } from "@/components/ProjectSelect";
 
 type Project = { id: string; name: string; slug: string };
 type TestCaseLite = { id: string; title: string; status: string };
@@ -232,23 +233,18 @@ export default function EditTestPlanPage({ params }: { params: { id: string } })
             <label className="text-sm text-text-muted">
               {t("testPlans.form.project")} <span className="text-red-400">*</span>
             </label>
-            <select
-              className={`w-full rounded-lg border bg-surface-2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 ${fieldErrors.projectId ? "border-red-500" : ""}`}
+            <ProjectFormSelect
+              projects={projects}
               value={projectId}
-              onChange={(e) => {
-                setProjectId(e.target.value);
+              onChange={(id) => {
+                setProjectId(id);
                 setSelected({});
                 setSelectedChecklists({});
                 setFieldErrors((prev) => ({ ...prev, projectId: "" }));
               }}
-            >
-              <option value="">{t("testPlans.selectProject")}</option>
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
+              firstOptionKey="testPlans.selectProject"
+              className={`w-full rounded-lg border bg-surface-2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 ${fieldErrors.projectId ? "border-red-500" : ""}`}
+            />
             {fieldErrors.projectId ? (
               <p className="text-xs text-red-400">{fieldErrors.projectId}</p>
             ) : null}

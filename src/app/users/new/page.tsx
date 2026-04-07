@@ -92,19 +92,23 @@ export default function NewUserPage() {
             <div className="space-y-1">
               <label className="text-sm text-text-muted">{t("users.projectAccesses")}</label>
               <div className="max-h-48 overflow-y-auto rounded-lg border bg-surface-2 p-2">
-                {projects.map((p) => (
-                  <label key={p.id} className="flex cursor-pointer items-center gap-2 py-1.5 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={projectIds.includes(p.id)}
-                      onChange={(e) => {
-                        if (e.target.checked) setProjectIds((prev) => [...prev, p.id]);
-                        else setProjectIds((prev) => prev.filter((id) => id !== p.id));
-                      }}
-                    />
-                    {p.name}
-                  </label>
-                ))}
+                {projects.length === 0 ? (
+                  <p className="px-1 py-2 text-sm text-text-muted">{t("common.noProjectsTableHint")}</p>
+                ) : (
+                  projects.map((p) => (
+                    <label key={p.id} className="flex cursor-pointer items-center gap-2 py-1.5 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={projectIds.includes(p.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) setProjectIds((prev) => [...prev, p.id]);
+                          else setProjectIds((prev) => prev.filter((id) => id !== p.id));
+                        }}
+                      />
+                      {p.name}
+                    </label>
+                  ))
+                )}
               </div>
             </div>
           )}

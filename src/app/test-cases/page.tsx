@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useLocale, useT } from "@/lib/i18n/useT";
+import { ProjectFilterSelect } from "@/components/ProjectSelect";
 
 type TestCase = {
   id: string;
@@ -140,34 +141,39 @@ export default function TestCasesPage() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <select
-          className="rounded-lg border bg-surface-2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+        <ProjectFilterSelect
+          projects={projects}
           value={projectId}
-          onChange={(e) => setProjectId(e.target.value)}
-        >
-          {projects.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
+          onChange={setProjectId}
+          className="rounded-lg border bg-surface-2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+        />
         <form className="flex flex-1 flex-wrap gap-2" action="/test-cases" method="get">
           <input type="hidden" name="projectId" value={projectId} />
           <input
             name="q"
             defaultValue={q}
-            className="w-full min-w-[220px] flex-1 rounded-lg border bg-surface-2 px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-500"
-            placeholder={t("testCases.searchPlaceholder")}
+            disabled={projects.length === 0}
+            className="w-full min-w-[220px] flex-1 rounded-lg border bg-surface-2 px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-60"
+            placeholder={
+              projects.length === 0 ? t("common.filtersNeedProject") : t("testCases.searchPlaceholder")
+            }
           />
           <select
             name="status"
             defaultValue={status}
-            className="rounded-lg border bg-surface-2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            disabled={projects.length === 0}
+            className="rounded-lg border bg-surface-2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <option value="">{t("common.all")}</option>
             <option value="draft">{t("testCases.status.draft")}</option>
             <option value="active">{t("testCases.status.active")}</option>
             <option value="archived">{t("testCases.status.archived")}</option>
           </select>
-          <button className="rounded-lg border bg-surface-2 px-3 py-2 text-sm font-medium hover:bg-surface-1">
+          <button
+            type="submit"
+            disabled={projects.length === 0}
+            className="rounded-lg border bg-surface-2 px-3 py-2 text-sm font-medium hover:bg-surface-1 disabled:cursor-not-allowed disabled:opacity-60"
+          >
             {t("common.apply")}
           </button>
         </form>
@@ -221,7 +227,14 @@ export default function TestCasesPage() {
                 )}
               </tr>
             ))}
-            {!loading && filtered.length === 0 ? (
+            {!loading && projects.length === 0 ? (
+              <tr>
+                <td className="px-4 py-6 text-text-muted" colSpan={canEdit ? 5 : 4}>
+                  {t("common.noProjectsTableHint")}
+                </td>
+              </tr>
+            ) : null}
+            {!loading && projects.length > 0 && filtered.length === 0 ? (
               <tr>
                 <td className="px-4 py-6 text-text-muted" colSpan={canEdit ? 5 : 4}>
                   {t("testCases.empty")}

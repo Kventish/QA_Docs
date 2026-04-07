@@ -50,11 +50,11 @@ export default function ProjectJiraForm(props: {
   return (
     <form className="mt-3 space-y-2 border-t border-surface-2 pt-3" onSubmit={save}>
       <div className="text-xs font-medium text-text-muted">{t("projects.jiraIntegration")}</div>
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-2 items-end">
         <div className="space-y-1">
           <label className="text-[11px] text-text-muted">{t("jira.projectKeyLabel")}</label>
           <input
-            className="w-full rounded border bg-surface-2 px-2 py-1.5 text-xs font-mono"
+            className="w-full rounded-lg border bg-surface-2 px-2 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-brand-500"
             value={jiraProjectKey}
             onChange={(e) => setJiraProjectKey(e.target.value)}
             placeholder="SCRUM"
@@ -63,22 +63,26 @@ export default function ProjectJiraForm(props: {
         <div className="space-y-1">
           <label className="text-[11px] text-text-muted">{t("jira.epicKeyLabel")}</label>
           <input
-            className="w-full rounded border bg-surface-2 px-2 py-1.5 text-xs font-mono"
+            className="w-full rounded-lg border bg-surface-2 px-2 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-brand-500"
             value={jiraEpicKey}
             onChange={(e) => setJiraEpicKey(e.target.value)}
             placeholder={t("jira.epicKeyPlaceholder")}
           />
         </div>
       </div>
-      <button
-        type="submit"
-        className="rounded border bg-surface-2 px-2 py-1 text-xs font-medium hover:bg-surface-1 disabled:opacity-60"
-        disabled={saving}
-      >
-        {saving ? t("common.loading") : t("jira.saveJiraSettings")}
-      </button>
-      {msg ? <p className="text-xs text-emerald-400">{msg}</p> : null}
-      {err ? <p className="text-xs text-red-400">{err}</p> : null}
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+        <button
+          type="submit"
+          className="rounded-lg border bg-surface-2 px-3 py-2 text-xs font-medium hover:bg-surface-1 disabled:opacity-60"
+          disabled={saving}
+        >
+          {saving ? t("common.loading") : t("jira.saveJiraSettings")}
+        </button>
+        <div className="min-h-[16px] text-right text-xs">
+          {msg ? <span className="text-emerald-400">{msg}</span> : null}
+          {err ? <span className="text-red-400">{err}</span> : null}
+        </div>
+      </div>
     </form>
   );
 }

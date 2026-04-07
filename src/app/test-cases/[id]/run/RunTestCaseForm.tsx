@@ -83,6 +83,11 @@ export default function RunTestCaseForm({
       return;
     }
 
+    const runId = json?.run?.id as string | undefined;
+    if (runId) {
+      window.location.assign(`/test-cases/${id}/runs/${runId}`);
+      return;
+    }
     setMessage(t("testCases.run.success", { locale }));
     setSaving(false);
   }

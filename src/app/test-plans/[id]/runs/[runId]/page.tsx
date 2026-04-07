@@ -6,8 +6,9 @@ import { canAccessProject } from "@/lib/project-access";
 import { getServerLocale } from "@/lib/i18n/getServerLocale";
 import { t } from "@/lib/i18n/t";
 import AttachmentViewer from "@/components/AttachmentViewer";
-import CopyPageLinkButton from "@/components/CopyPageLinkButton";
 import { flattenTestCaseSteps } from "@/lib/test-case-includes";
+import JiraRunIssueActions from "@/components/JiraRunIssueActions";
+import { getJiraConfig, jiraBrowseUrl } from "@/lib/jira";
 
 export const dynamic = "force-dynamic";
 
@@ -16,8 +17,8 @@ type TestPlanRunDetail = {
   status: string;
   summary: string;
   detailsJson?: {
-    cases?: Array<{ id: string; title: string }>;
-    checklists?: Array<{ id: string; title: string }>;
+    cases?: Array<{ id: string; title: string; stepDone?: boolean[] }>;
+    checklists?: Array<{ id: string; title: string; itemDone?: boolean[] }>;
   };
   attachmentsJson?: Array<{ name: string; url: string }>;
   createdAt: Date;
@@ -31,6 +32,8 @@ type TestPlanRunDetail = {
 export default async function TestPlanRunDetailPage({ params }: { params: { id: string; runId: string } }) {
   const session = requireRoleOrRedirect("viewer", `/test-plans/${params.id}/runs/${params.runId}`);
   const locale = getServerLocale();
+  const jiraCfg = getJiraConfig();
+  const canEdit = (session as any)?.role === "editor" || (session as any)?.role === "admin";
   const run = await (prisma as any).testPlanRun.findUnique({
     where: { id: params.runId },
     include: { testPlan: true }
@@ -60,6 +63,13 @@ export default async function TestPlanRunDetailPage({ params }: { params: { id: 
     .map((id) => checklistMap.get(id))
     .filter((item): item is (typeof checklists)[number] => Boolean(item));
 
+  const caseDoneMap = new Map(
+    (Array.isArray(details?.cases) ? details!.cases! : []).map((c) => [c.id, Array.isArray(c.stepDone) ? c.stepDone : []])
+  );
+  const checklistDoneMap = new Map(
+    (Array.isArray(details?.checklists) ? details!.checklists! : []).map((c) => [c.id, Array.isArray(c.itemDone) ? c.itemDone : []])
+  );
+
   const caseStepResolutions = await Promise.all(
     includedCases.map(async (item) => ({
       item,
@@ -76,7 +86,15 @@ export default async function TestPlanRunDetailPage({ params }: { params: { id: 
           <div className="mt-2 text-sm text-text-muted">{t("runHistory.descriptionTestPlan", { locale })}</div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <CopyPageLinkButton path={`/test-plans/${params.id}/runs/${params.runId}`} />
+          <JiraRunIssueActions
+            entity="testPlanRun"
+            runId={run.id}
+            issueKey={(run as any).jiraIssueKey ?? null}
+            browseUrl={(run as any).jiraIssueKey && jiraCfg ? jiraBrowseUrl(jiraCfg.baseUrl, (run as any).jiraIssueKey) : null}
+            canEdit={canEdit}
+            jiraConfigured={!!jiraCfg}
+            size="md"
+          />
           <Link
             className="rounded-lg border bg-surface-2 px-3 py-2 text-sm font-medium hover:bg-surface-1"
             href={`/test-plans/${run.testPlan.id}/runs`}
@@ -118,7 +136,11 @@ export default async function TestPlanRunDetailPage({ params }: { params: { id: 
                 <div className="text-xs uppercase tracking-[0.2em] text-text-muted">{t("runHistory.includedTestCases", { locale })}</div>
                 {includedCases.length > 0 ? (
                   <div className="mt-3 space-y-4">
-                    {caseStepResolutions.map(({ item, resolved }) => (
+                    {caseStepResolutions.map(({ item, resolved }) => {
+                      const done = caseDoneMap.get(item.id) ?? [];
+                      const doneCount = done.filter(Boolean).length;
+                      const totalCount = resolved.steps.length;
+                      return (
                       <section key={item.id} className="rounded-xl border bg-surface-2 p-4">
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <Link href={`/test-cases/${item.id}`} className="text-lg font-semibold text-brand-600 hover:underline">
@@ -127,6 +149,9 @@ export default async function TestPlanRunDetailPage({ params }: { params: { id: 
                           <span className="rounded-md bg-surface-1 px-2 py-1 text-xs text-text-muted">
                             {t(`testCases.status.${item.status}` as any, { locale })}
                           </span>
+                        </div>
+                        <div className="mt-2 text-xs text-text-muted">
+                          {doneCount} / {totalCount || done.length} {t("testCases.run.stepsLabel", { locale })}
                         </div>
                         {item.description ? (
                           <div className="mt-3 text-sm text-text-muted">
@@ -171,6 +196,15 @@ export default async function TestPlanRunDetailPage({ params }: { params: { id: 
                                       </Link>
                                     ) : null}
                                   </div>
+                                  <div className="mt-2 flex items-center gap-2">
+                                    <span
+                                      className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                                        done[idx] ? "bg-emerald-500/15 text-emerald-300" : "bg-red-500/20 text-red-200"
+                                      }`}
+                                    >
+                                      {done[idx] ? t("runHistory.stepPassed", { locale }) : t("runHistory.stepFailed", { locale })}
+                                    </span>
+                                  </div>
                                   <div className="mt-1 text-text">{step.step || t("testCases.emptyText", { locale })}</div>
                                   {step.expectedResult ? (
                                     <div className="mt-2 text-xs text-text-muted">{t("testCases.expectedResult", { locale })}</div>
@@ -182,7 +216,8 @@ export default async function TestPlanRunDetailPage({ params }: { params: { id: 
                           </div>
                         ) : null}
                       </section>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="mt-3 text-sm text-text-muted">{t("runHistory.noIncludedTestCases", { locale })}</div>
@@ -192,7 +227,11 @@ export default async function TestPlanRunDetailPage({ params }: { params: { id: 
                 <div className="text-xs uppercase tracking-[0.2em] text-text-muted">{t("runHistory.includedChecklists", { locale })}</div>
                 {includedChecklists.length > 0 ? (
                   <div className="mt-3 space-y-4">
-                    {includedChecklists.map((item) => (
+                    {includedChecklists.map((item) => {
+                      const done = checklistDoneMap.get(item.id) ?? [];
+                      const total = Array.isArray(item.itemsJson) ? item.itemsJson.length : done.length;
+                      const doneCount = done.filter(Boolean).length;
+                      return (
                       <section key={item.id} className="rounded-xl border bg-surface-2 p-4">
                         <div className="flex items-center justify-between gap-3">
                           <Link href={`/checklists/${item.id}`} className="text-lg font-semibold text-brand-600 hover:underline">
@@ -202,6 +241,9 @@ export default async function TestPlanRunDetailPage({ params }: { params: { id: 
                             {t(`checklists.status.${item.status}` as any, { locale })}
                           </span>
                         </div>
+                        <div className="mt-2 text-xs text-text-muted">
+                          {doneCount} / {total} {t("runHistory.checklistItems", { locale })}
+                        </div>
                         {Array.isArray(item.itemsJson) && item.itemsJson.length > 0 ? (
                           <div className="mt-3 text-sm text-text-muted">
                             <div className="font-medium text-text">{t("checklists.itemsLabel", { locale })}</div>
@@ -209,6 +251,15 @@ export default async function TestPlanRunDetailPage({ params }: { params: { id: 
                               {item.itemsJson.map((itemEntry: any, idx: number) => (
                                 <li key={idx} className="rounded-lg border bg-surface-1 p-3">
                                   <div className="text-xs text-text-muted">{t("testCases.stepLabel", { locale, vars: { n: idx + 1 } })}</div>
+                                  <div className="mt-2 flex items-center gap-2">
+                                    <span
+                                      className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                                        done[idx] ? "bg-emerald-500/15 text-emerald-300" : "bg-red-500/20 text-red-200"
+                                      }`}
+                                    >
+                                      {done[idx] ? t("runHistory.stepPassed", { locale }) : t("runHistory.stepFailed", { locale })}
+                                    </span>
+                                  </div>
                                   <div className="mt-1 text-text">{itemEntry.text || t("checklists.emptyText", { locale })}</div>
                                   {itemEntry.expectedResult ? (
                                     <div className="mt-2 text-xs text-text-muted">{t("checklists.run.expectedResult", { locale })}</div>
@@ -222,7 +273,8 @@ export default async function TestPlanRunDetailPage({ params }: { params: { id: 
                           <div className="mt-3 text-sm text-text-muted">{t("checklists.run.noItems", { locale })}</div>
                         )}
                       </section>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="mt-3 text-sm text-text-muted">{t("runHistory.noIncludedChecklists", { locale })}</div>

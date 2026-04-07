@@ -35,7 +35,10 @@ export const en = {
     email: "Email",
     copyLink: "Copy link",
     linkCopied: "Link copied",
-    copyLinkFailed: "Could not copy link"
+    copyLinkFailed: "Could not copy link",
+    noProjects: "No projects",
+    filtersNeedProject: "Create a project first…",
+    noProjectsTableHint: "No projects yet. Create one under Projects."
   },
   jira: {
     sectionTitle: "Jira",
@@ -118,6 +121,7 @@ export const en = {
     details: "Details",
     notes: "Notes",
     attachments: "Attachments",
+    jira: "Jira",
     sectionSteps: "Run steps",
     sectionAttachments: "Run attachments",
     sectionChecklistItems: "Checklist items",

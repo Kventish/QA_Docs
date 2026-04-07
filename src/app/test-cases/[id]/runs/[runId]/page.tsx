@@ -6,8 +6,9 @@ import { canAccessProject } from "@/lib/project-access";
 import { getServerLocale } from "@/lib/i18n/getServerLocale";
 import { t } from "@/lib/i18n/t";
 import AttachmentViewer from "@/components/AttachmentViewer";
-import CopyPageLinkButton from "@/components/CopyPageLinkButton";
 import { flattenTestCaseSteps } from "@/lib/test-case-includes";
+import JiraRunIssueActions from "@/components/JiraRunIssueActions";
+import { getJiraConfig, jiraBrowseUrl } from "@/lib/jira";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,8 @@ type TestCaseRunDetail = {
 export default async function TestCaseRunDetailPage({ params }: { params: { id: string; runId: string } }) {
   const session = requireRoleOrRedirect("viewer", `/test-cases/${params.id}/runs/${params.runId}`);
   const locale = getServerLocale();
+  const jiraCfg = getJiraConfig();
+  const canEdit = (session as any)?.role === "editor" || (session as any)?.role === "admin";
   const run = await (prisma as any).testCaseRun.findUnique({
     where: { id: params.runId },
     include: { testCase: true }
@@ -53,7 +56,15 @@ export default async function TestCaseRunDetailPage({ params }: { params: { id: 
           <div className="mt-2 text-sm text-text-muted">{t("runHistory.descriptionTestCase", { locale })}</div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <CopyPageLinkButton path={`/test-cases/${params.id}/runs/${params.runId}`} />
+          <JiraRunIssueActions
+            entity="testCaseRun"
+            runId={run.id}
+            issueKey={(run as any).jiraIssueKey ?? null}
+            browseUrl={(run as any).jiraIssueKey && jiraCfg ? jiraBrowseUrl(jiraCfg.baseUrl, (run as any).jiraIssueKey) : null}
+            canEdit={canEdit}
+            jiraConfigured={!!jiraCfg}
+            size="md"
+          />
           <Link
             className="rounded-lg border bg-surface-2 px-3 py-2 text-sm font-medium hover:bg-surface-1"
             href={`/test-cases/${run.testCase.id}/runs`}

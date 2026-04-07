@@ -124,7 +124,8 @@ async function resolveIssueTypeId(projectKey: string): Promise<{ ok: true; id: s
   const envId = cleanEnvValue(process.env.JIRA_ISSUE_TYPE_ID);
   if (envId) return { ok: true, id: envId };
 
-  const typeName = cleanEnvValue(process.env.JIRA_ISSUE_TYPE) || "Task";
+  // Default to Bug unless explicitly overridden.
+  const typeName = cleanEnvValue(process.env.JIRA_ISSUE_TYPE) || "Bug";
   const q = new URLSearchParams({
     projectKeys: projectKey,
     issuetypeNames: typeName
@@ -163,22 +164,49 @@ export async function jiraCreateIssue(
     return { ok: false, status: 400, error: it.error };
   }
 
-  const fields: Record<string, unknown> = {
+  const baseFields: Record<string, unknown> = {
     project: { key: params.projectKey },
     summary: params.summary.slice(0, 255),
     issuetype: { id: it.id },
     description: buildAdfDescription(params.descriptionPlain)
   };
 
-  if (params.epicKey?.trim()) {
-    fields.parent = { key: params.epicKey.trim().toUpperCase() };
+  async function createWithFields(fields: Record<string, unknown>) {
+    const body = JSON.stringify({ fields });
+    return jiraRequest<{ key: string; id: string }>("/rest/api/3/issue", {
+      method: "POST",
+      body
+    });
   }
 
-  const body = JSON.stringify({ fields });
-  const r = await jiraRequest<{ key: string; id: string }>("/rest/api/3/issue", {
-    method: "POST",
-    body
-  });
+  // В разных конфигурациях Jira (иерархия/issue type) привязка к epic через `parent`
+  // может быть запрещена и даёт ошибки вида `errors.parentId = ...`.
+  const epicKey = params.epicKey?.trim() ? params.epicKey.trim().toUpperCase() : null;
+  const firstFields = epicKey ? { ...baseFields, parent: { key: epicKey } } : baseFields;
+
+  let r = await createWithFields(firstFields);
+  if (!r.ok && epicKey) {
+    const err = String(r.errorText || "");
+    const looksLikeParentHierarchyError =
+      err.toLowerCase().includes("parentid") ||
+      err.toLowerCase().includes("parent") ||
+      err.toLowerCase().includes("иерарх");
+
+    if (looksLikeParentHierarchyError) {
+      // Ретрай без parent: создаём задачу хотя бы без привязки к epic.
+      r = await createWithFields(baseFields);
+      if (!r.ok) {
+        return {
+          ok: false,
+          status: r.status,
+          error:
+            `${err}\n\n` +
+            `Дополнительно: не удалось создать задачу даже без Epic (${epicKey}). ` +
+            `Проверьте, что ключ Epic относится к этому проекту и что тип задачи поддерживает такую иерархию.`
+        };
+      }
+    }
+  }
 
   if (!r.ok) {
     return { ok: false, status: r.status, error: r.errorText };
@@ -188,4 +216,44 @@ export async function jiraCreateIssue(
     return { ok: false, status: 500, error: "Jira did not return issue key" };
   }
   return { ok: true, issueKey: key };
+}
+
+export type JiraAttachment = {
+  fileName: string;
+  content: Uint8Array;
+  mimeType?: string;
+};
+
+export async function jiraAddAttachments(
+  issueKey: string,
+  attachments: JiraAttachment[]
+): Promise<{ ok: true; count: number } | { ok: false; status: number; error: string }> {
+  const cfg = getJiraConfig();
+  if (!cfg) return { ok: false, status: 0, error: "Jira is not configured" };
+  if (!attachments.length) return { ok: true, count: 0 };
+
+  const url = `${cfg.baseUrl}/rest/api/3/issue/${encodeURIComponent(issueKey)}/attachments`;
+  const form = new FormData();
+  for (const a of attachments) {
+    const blob = new Blob([a.content], { type: a.mimeType || "application/octet-stream" });
+    form.append("file", blob, a.fileName);
+  }
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      Authorization: basicAuthHeader(cfg.email, cfg.apiToken),
+      "X-Atlassian-Token": "no-check"
+      // NOTE: do not set Content-Type for multipart; fetch will set boundary.
+    } as any,
+    body: form as any,
+    cache: "no-store"
+  });
+
+  const text = await res.text().catch(() => "");
+  if (!res.ok) {
+    return { ok: false, status: res.status, error: parseJiraErrorBody(text) };
+  }
+  return { ok: true, count: attachments.length };
 }

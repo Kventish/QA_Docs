@@ -5,10 +5,7 @@ import { requireRoleOrRedirect } from "@/lib/rbac-server";
 import { canAccessProject } from "@/lib/project-access";
 import { getServerLocale } from "@/lib/i18n/getServerLocale";
 import { t } from "@/lib/i18n/t";
-import CopyPageLinkButton from "@/components/CopyPageLinkButton";
-import JiraIssueActions from "@/components/JiraIssueActions";
 import { flattenTestCaseSteps } from "@/lib/test-case-includes";
-import { getJiraConfig, jiraBrowseUrl } from "@/lib/jira";
 
 export const dynamic = "force-dynamic";
 
@@ -28,10 +25,6 @@ export default async function TestCaseViewPage({ params }: { params: { id: strin
     : { steps: [], error: null as string | null };
   const displaySteps = resolved.steps;
 
-  const jiraCfg = getJiraConfig();
-  const jiraBrowse =
-    tc.jiraIssueKey && jiraCfg ? jiraBrowseUrl(jiraCfg.baseUrl, tc.jiraIssueKey) : null;
-
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <div className="flex items-start justify-between gap-3">
@@ -48,7 +41,6 @@ export default async function TestCaseViewPage({ params }: { params: { id: strin
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <CopyPageLinkButton path={`/test-cases/${tc.id}`} />
           <Link
             className="rounded-lg border bg-surface-2 px-3 py-2 text-sm font-medium hover:bg-surface-1"
             href={`/test-cases/${tc.id}/run`}
@@ -71,20 +63,6 @@ export default async function TestCaseViewPage({ params }: { params: { id: strin
           )}
         </div>
       </div>
-
-      <section className="rounded-xl border bg-surface-1 p-4">
-        <div className="text-sm font-medium">{t("jira.sectionTitle", { locale })}</div>
-        <div className="mt-2">
-          <JiraIssueActions
-            entity="testCase"
-            entityId={tc.id}
-            issueKey={tc.jiraIssueKey}
-            browseUrl={jiraBrowse}
-            canEdit={canEdit}
-            jiraConfigured={!!jiraCfg}
-          />
-        </div>
-      </section>
 
       {hasSteps ? (
         <div className="space-y-4">

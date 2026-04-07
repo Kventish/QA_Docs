@@ -169,6 +169,7 @@ model TestCaseRun {
   status       RunStatus  @default(pending)
   actualResult String     @default("")
   notes        String     @default("")
+  jiraIssueKey String?
   stepsJson    Json       @default("[]")
   attachmentsJson Json     @default("[]")
   createdAt    DateTime   @default(now())
@@ -187,6 +188,7 @@ model ChecklistRun {
   status       RunStatus  @default(pending)
   itemResults  Json       @default("[]")
   notes        String     @default("")
+  jiraIssueKey String?
   attachmentsJson Json     @default("[]")
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
@@ -204,6 +206,7 @@ model TestPlanRun {
   status      RunStatus  @default(pending)
   summary     String     @default("")
   detailsJson Json       @default("[]")
+  jiraIssueKey String?
   attachmentsJson Json     @default("[]")
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
