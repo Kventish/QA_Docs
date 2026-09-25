@@ -11,7 +11,7 @@ const BodySchema = z.object({
 });
 
 export async function POST(req: Request) {
-  const auth = apiRequireRole("viewer");
+  const auth = await apiRequireRole("viewer");
   if (!auth.ok) return NextResponse.json({ error: "Unauthorized" }, { status: auth.status });
 
   const json = await req.json().catch(() => null);

@@ -10,8 +10,8 @@ function hasRequiredRole(
   return userRole === "admin";
 }
 
-export function requireRoleOrRedirect(required: "admin" | "editor" | "viewer", nextPath: string) {
-  const session = getSession();
+export async function requireRoleOrRedirect(required: "admin" | "editor" | "viewer", nextPath: string) {
+  const session = await getSession();
   if (!session) redirect(`/login?next=${encodeURIComponent(nextPath)}`);
   if (!hasRequiredRole(session.role, required)) redirect("/");
   return session;

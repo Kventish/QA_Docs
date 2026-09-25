@@ -8,7 +8,7 @@ import { canAccessProject } from "@/lib/project-access";
 export const runtime = "nodejs";
 
 export async function GET(req: Request) {
-  const auth = apiRequireRole("viewer");
+  const auth = await apiRequireRole("viewer");
   if (!auth.ok) return NextResponse.json({ error: "Unauthorized" }, { status: auth.status });
   const url = new URL(req.url);
   let projectId = url.searchParams.get("projectId") ?? null;
@@ -47,7 +47,7 @@ const CreateSchema = z.object({
 });
 
 export async function POST(req: Request) {
-  const auth = apiRequireRole("editor");
+  const auth = await apiRequireRole("editor");
   if (!auth.ok) return NextResponse.json({ error: "Unauthorized" }, { status: auth.status });
   const json = await req.json().catch(() => null);
   const parsed = CreateSchema.safeParse(json);

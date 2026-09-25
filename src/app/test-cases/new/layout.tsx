@@ -1,10 +1,10 @@
 import { requireRoleOrRedirect } from "@/lib/rbac-server";
 
-export default function NewTestCaseLayout({
+export default async function NewTestCaseLayout({
   children
 }: {
   children: React.ReactNode;
 }) {
-  requireRoleOrRedirect("editor", "/test-cases");
+  await requireRoleOrRedirect("editor", "/test-cases");
   return <>{children}</>;
 }

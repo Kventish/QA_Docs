@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 type Item = { text: string; checked: boolean; expectedResult?: string };
 
 export default async function ChecklistViewPage({ params }: { params: { id: string } }) {
-  const session = requireRoleOrRedirect("viewer", `/checklists/${params.id}`);
+  const session = await requireRoleOrRedirect("viewer", `/checklists/${params.id}`);
   const locale = getServerLocale();
   const cl = await prisma.checklist.findUnique({ where: { id: params.id } });
   if (!cl) return notFound();

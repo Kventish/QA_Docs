@@ -7,7 +7,7 @@ import { apiRequireRole } from "@/lib/api-auth";
 export const runtime = "nodejs";
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
-  const auth = apiRequireRole("admin");
+  const auth = await apiRequireRole("admin");
   if (!auth.ok) return NextResponse.json({ error: "Unauthorized" }, { status: auth.status });
 
   const user = await prisma.user.findUnique({
@@ -41,7 +41,7 @@ const PatchSchema = z.object({
 });
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
-  const auth = apiRequireRole("admin");
+  const auth = await apiRequireRole("admin");
   if (!auth.ok) return NextResponse.json({ error: "Unauthorized" }, { status: auth.status });
 
   const json = await req.json().catch(() => null);
@@ -120,7 +120,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 }
 
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
-  const auth = apiRequireRole("admin");
+  const auth = await apiRequireRole("admin");
   if (!auth.ok) return NextResponse.json({ error: "Unauthorized" }, { status: auth.status });
 
   const isSelf = auth.session.id === params.id;
@@ -130,7 +130,10 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
     return NextResponse.json({ error: "Cannot delete current user" }, { status: 400 });
   }
 
-  await prisma.user.delete({ where: { id: params.id } }).catch(() => null);
+  await prisma.user.updateMany({
+    where: { id: params.id, deletedAt: null },
+    data: { deletedAt: new Date(), disabledAt: new Date() }
+  });
   return NextResponse.json({ ok: true });
 }
 

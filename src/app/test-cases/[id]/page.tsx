@@ -10,7 +10,7 @@ import { flattenTestCaseSteps } from "@/lib/test-case-includes";
 export const dynamic = "force-dynamic";
 
 export default async function TestCaseViewPage({ params }: { params: { id: string } }) {
-  const session = requireRoleOrRedirect("viewer", `/test-cases/${params.id}`);
+  const session = await requireRoleOrRedirect("viewer", `/test-cases/${params.id}`);
   const locale = getServerLocale();
   const tc = await prisma.testCase.findUnique({ where: { id: params.id } });
   if (!tc) return notFound();

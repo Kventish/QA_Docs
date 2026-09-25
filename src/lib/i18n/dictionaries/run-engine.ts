@@ -1,0 +1,101 @@
+const en = {
+  startPage: {
+    titles: { test_case: "Launch test case", checklist: "Launch checklist", test_plan: "Launch test plan" },
+    beforeStart: "Before start",
+    description: "Starting creates an immutable copy of the current definition and starts the server timer.",
+    documentStatus: "Document status",
+    executableSteps: "Executable steps",
+    activeTitle: "An unfinished run exists",
+    activeDescription: "Continue your current run or start another independent run.",
+    continueRun: "Continue run",
+    startRun: "Start run",
+    startNew: "Start new run"
+  },
+  step: "Step", runDetails: "Run details", runAttachments: "Run attachments", notes: "Notes", noAttachments: "No attachments",
+  start: "Start", resume: "Resume", view: "Open run", history: "Run history", back: "Back to document",
+  snapshot: "Snapshot at start", legacy: "Legacy Run", unknown: "Unknown",
+  legacyDefinition: "Historical definition is unavailable. The current document is not used to reconstruct this run.",
+  legacyPayload: "Original payload (done is a legacy execution flag, not a V2 result)",
+  date: "Date", user: "Executed by", lifecycle: "Lifecycle", result: "Result", duration: "Duration", version: "Version",
+  auto: "Automatic result", final: "Final result", actual: "Actual result", severity: "Severity",
+  severityRequired: "Severity is required for Failed", none: "Not specified", expected: "Expected result",
+  description: "Description", preconditions: "Preconditions", postconditions: "Postconditions", objective: "Objective", scope: "Scope",
+  comments: "Comments", addComment: "Add comment", attachments: "Attachments", upload: "Upload file",
+  fileHint: "One PNG, JPEG, WebP, PDF, UTF-8 TXT/LOG file, up to 3 MiB.", download: "Download",
+  complete: "Complete", cancel: "Cancel run", reason: "Reason", override: "Override final result",
+  applyOverride: "Apply audited correction", audit: "Result corrections", previous: "Previous result",
+  saving: "Saving…", saved: "Saved", saveFailed: "Save failed", uploading: "Uploading…", unsaved: "Unsaved changes", retry: "Retry save", reload: "Reload saved state",
+  reloadWarning: "Reload and discard unsaved edits?", cancelDiscardWarning: "There are unsaved changes. Cancelling the run will discard them.", loading: "Loading…", empty: "No runs yet",
+  timerHint: "Elapsed time includes time while the page is closed.", incomplete: "Evaluate every executable step before completing.",
+  group: "Group", includedFrom: "Included from", planItems: "Plan participants", parent: "Back to plan run",
+  cancelledReason: "Cancellation reason", next: "Next", previousPage: "Previous", legacyHistory: "Legacy history",
+  startHint: "Start saves an immutable definition and starts the timer. To continue an existing run, use Resume in history.",
+  states: { passed: "Passed", failed: "Failed", questionable: "Questionable", in_progress: "In progress", completed: "Completed", cancelled: "Cancelled", not_started: "Not started" },
+  severities: { low: "Low", medium: "Medium", high: "High", critical: "Critical" },
+  errors: {
+    unauthorized: "Sign in again.", forbidden: "You do not have permission for this action.", notFound: "Run or document not found.",
+    conflict: "The run has changed. Reload saved state before continuing; unsaved edits will be discarded only after confirmation.",
+    idempotencyConflict: "This Start request key belongs to a different run.", closed: "The run or its parent plan is already closed.",
+    severityRequired: "Select a severity for Failed.", reasonRequired: "Enter a reason.", incomplete: "Complete all required executable steps or plan participants first.",
+    invalidPayload: "Check the fields and try again.", serverError: "Request failed. Check the saved state before retrying.",
+    invalidDefinition: "The document contains invalid or empty steps.", invalidInclude: "An included test case is missing, cyclic or belongs to another project.",
+    emptyDefinition: "An empty document cannot be started.", definitionTooLarge: "The definition exceeds the run size limit.",
+    archived: "An archived document cannot be started.", fileSize: "Maximum file size is 3 MiB; one file per request.",
+    fileType: "File extension, MIME or contents are not an allowed format.", network: "Network error. Your edits have not been confirmed as saved.",
+    autosaveFailed: "Some step changes were not saved. Resolve the highlighted save errors before continuing.",
+    saving: "Another run operation is still in progress."
+  }
+};
+const ru: typeof en = {
+  startPage: {
+    titles: { test_case: "Запуск тест-кейса", checklist: "Запуск чек-листа", test_plan: "Запуск тест-плана" },
+    beforeStart: "Перед запуском",
+    description: "При запуске сохраняется неизменяемый снимок текущей версии документа и запускается серверный таймер.",
+    documentStatus: "Статус документа",
+    executableSteps: "Исполняемые шаги",
+    activeTitle: "Есть незавершённый прогон",
+    activeDescription: "Продолжите текущий прогон или запустите ещё один независимый прогон.",
+    continueRun: "Продолжить прогон",
+    startRun: "Начать прогон",
+    startNew: "Начать новый прогон"
+  },
+  step: "Шаг", runDetails: "Данные прогона", runAttachments: "Вложения прогона", notes: "Заметки", noAttachments: "Вложений нет",
+  start: "Начать", resume: "Продолжить", view: "Открыть прогон", history: "История прогонов", back: "К документу",
+  snapshot: "Снимок на момент запуска", legacy: "Legacy Run", unknown: "Неизвестно",
+  legacyDefinition: "Историческое определение недоступно. Текущий документ не используется для восстановления этого прогона.",
+  legacyPayload: "Исходный payload (done — старый флаг выполнения, не результат V2)",
+  date: "Дата", user: "Исполнитель", lifecycle: "Состояние", result: "Результат", duration: "Длительность", version: "Версия",
+  auto: "Автоматический результат", final: "Итоговый результат", actual: "Фактический результат", severity: "Серьёзность",
+  severityRequired: "Для Failed необходимо выбрать серьёзность", none: "Не указано", expected: "Ожидаемый результат",
+  description: "Описание", preconditions: "Предусловия", postconditions: "Постусловия", objective: "Цель", scope: "Область проверки",
+  comments: "Комментарии", addComment: "Добавить комментарий", attachments: "Вложения", upload: "Загрузить файл",
+  fileHint: "Один файл PNG, JPEG, WebP, PDF, TXT/LOG в UTF-8, до 3 MiB.", download: "Скачать",
+  complete: "Завершить", cancel: "Отменить прогон", reason: "Причина", override: "Изменить итог вручную",
+  applyOverride: "Сохранить корректировку с аудитом", audit: "Корректировки результата", previous: "Предыдущий итог",
+  saving: "Сохраняется…", saved: "Сохранено", saveFailed: "Ошибка сохранения", uploading: "Загрузка…", unsaved: "Есть несохранённые изменения", retry: "Повторить сохранение", reload: "Загрузить сохранённое состояние",
+  reloadWarning: "Загрузить сохранённое состояние и отменить несохранённые правки?", cancelDiscardWarning: "Есть несохранённые изменения. При отмене прогона они будут отброшены.", loading: "Загрузка…", empty: "Прогонов пока нет",
+  timerHint: "Время продолжает учитываться при закрытой странице.", incomplete: "Оцените все исполняемые шаги перед завершением.",
+  group: "Группа", includedFrom: "Включено из", planItems: "Участники плана", parent: "К прогону плана",
+  cancelledReason: "Причина отмены", next: "Далее", previousPage: "Назад", legacyHistory: "История Legacy",
+  startHint: "Начало прогона сохраняет неизменяемое определение и запускает таймер. Для продолжения существующего прогона используйте историю.",
+  states: { passed: "Пройден", failed: "Провален", questionable: "Под вопросом", in_progress: "Выполняется", completed: "Завершён", cancelled: "Отменён", not_started: "Не начат" },
+  severities: { low: "Низкая", medium: "Средняя", high: "Высокая", critical: "Критическая" },
+  errors: {
+    unauthorized: "Войдите снова.", forbidden: "Недостаточно прав для этого действия.", notFound: "Прогон или документ не найден.",
+    conflict: "Прогон изменился. Загрузите сохранённое состояние; несохранённые правки будут сброшены только после подтверждения.",
+    idempotencyConflict: "Ключ запроса Start относится к другому прогону.", closed: "Прогон или родительский план уже закрыт.",
+    severityRequired: "Выберите серьёзность для Failed.", reasonRequired: "Укажите причину.", incomplete: "Сначала завершите все обязательные шаги или участников плана.",
+    invalidPayload: "Проверьте заполнение полей.", serverError: "Ошибка запроса. Перед повтором проверьте сохранённое состояние.",
+    invalidDefinition: "В документе некорректные или пустые шаги.", invalidInclude: "Включённый тест-кейс отсутствует, образует цикл или находится в другом проекте.",
+    emptyDefinition: "Нельзя запустить пустой документ.", definitionTooLarge: "Определение превышает допустимый размер прогона.",
+    archived: "Нельзя запустить архивный документ.", fileSize: "Максимум 3 MiB, один файл на запрос.",
+    fileType: "Расширение, MIME или содержимое файла не соответствуют разрешённому формату.", network: "Ошибка сети. Сохранение ваших изменений не подтверждено.",
+    autosaveFailed: "Часть изменений шагов не сохранена. Исправьте отмеченные ошибки сохранения перед продолжением.",
+    saving: "Другая операция с прогоном ещё выполняется."
+  }
+};
+export const runLabels = { en, ru };
+export type RunLabels = typeof en;
+export function runErrorLabel(code: string, labels: RunLabels) {
+  return labels.errors[code as keyof RunLabels["errors"]] ?? labels.errors.serverError;
+}

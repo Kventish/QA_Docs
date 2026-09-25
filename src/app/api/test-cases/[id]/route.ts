@@ -11,7 +11,7 @@ export async function GET(
   _req: Request,
   { params }: { params: { id: string } }
 ) {
-  const auth = apiRequireRole("viewer");
+  const auth = await apiRequireRole("viewer");
   if (!auth.ok) return NextResponse.json({ error: "Unauthorized" }, { status: auth.status });
 
   const tc = await prisma.testCase.findUnique({ where: { id: params.id } });
@@ -52,7 +52,7 @@ export async function PATCH(
   req: Request,
   { params }: { params: { id: string } }
 ) {
-  const auth = apiRequireRole("editor");
+  const auth = await apiRequireRole("editor");
   if (!auth.ok) return NextResponse.json({ error: "Unauthorized" }, { status: auth.status });
 
   const json = await req.json().catch(() => null);
@@ -106,7 +106,7 @@ export async function DELETE(
   _req: Request,
   { params }: { params: { id: string } }
 ) {
-  const auth = apiRequireRole("editor");
+  const auth = await apiRequireRole("editor");
   if (!auth.ok) return NextResponse.json({ error: "Unauthorized" }, { status: auth.status });
 
   await prisma.testCase.delete({ where: { id: params.id } }).catch(() => null);

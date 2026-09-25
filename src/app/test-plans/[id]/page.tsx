@@ -9,7 +9,7 @@ import { t } from "@/lib/i18n/t";
 export const dynamic = "force-dynamic";
 
 export default async function TestPlanViewPage({ params }: { params: { id: string } }) {
-  const session = requireRoleOrRedirect("viewer", `/test-plans/${params.id}`);
+  const session = await requireRoleOrRedirect("viewer", `/test-plans/${params.id}`);
   const locale = getServerLocale();
   const plan = await prisma.testPlan.findUnique({
     where: { id: params.id },

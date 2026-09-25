@@ -4,7 +4,7 @@ import { getSession } from "@/lib/auth";
 export const runtime = "nodejs";
 
 export async function GET() {
-  const session = getSession();
+  const session = await getSession();
   return NextResponse.json({ session });
 }
 

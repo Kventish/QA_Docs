@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 const LIMIT = 8;
 
 export async function GET(req: Request) {
-  const auth = apiRequireRole("viewer");
+  const auth = await apiRequireRole("viewer");
   if (!auth.ok) return NextResponse.json({ error: "Unauthorized" }, { status: auth.status });
 
   const url = new URL(req.url);

@@ -41,8 +41,16 @@ model User {
   role         Role     @default(viewer)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  disabledAt   DateTime?
+  deletedAt    DateTime?
 
   projectAccesses UserProjectAccess[]
+  startedRuns Run[] @relation("RunStarter")
+  cancelledRuns Run[] @relation("RunCanceller")
+  updatedSteps StepRunResult[]
+  runComments StepRunComment[]
+  runAttachments RunAttachment[]
+  runOverrides RunOverrideEvent[]
 }
 
 model Project {
@@ -56,6 +64,7 @@ model Project {
   checklists Checklist[]
   testPlans  TestPlan[]
   userAccesses UserProjectAccess[]
+  engineRuns Run[]
 }
 
 model UserProjectAccess {
@@ -87,6 +96,8 @@ model TestCase {
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   plans   TestPlanCase[]
   runs    TestCaseRun[]
+  engineRuns Run[]
+  enginePlanItems TestPlanRunItem[]
 
   @@index([projectId])
   @@index([status])
@@ -106,6 +117,8 @@ model Checklist {
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   plans   TestPlanChecklist[]
   runs    ChecklistRun[]
+  engineRuns Run[]
+  enginePlanItems TestPlanRunItem[]
 
   @@index([projectId])
   @@index([status])
@@ -127,6 +140,7 @@ model TestPlan {
   cases   TestPlanCase[]
   checklists TestPlanChecklist[]
   runs    TestPlanRun[]
+  engineRuns Run[]
 
   @@index([projectId])
   @@index([status])
@@ -168,7 +182,7 @@ model TestCaseRun {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
-  testCase TestCase @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+  testCase TestCase @relation(fields: [testCaseId], references: [id], onDelete: Restrict)
 
   @@index([testCaseId])
   @@index([status])
@@ -185,7 +199,7 @@ model ChecklistRun {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
-  checklist Checklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  checklist Checklist @relation(fields: [checklistId], references: [id], onDelete: Restrict)
 
   @@index([checklistId])
   @@index([status])
@@ -202,9 +216,178 @@ model TestPlanRun {
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
-  testPlan TestPlan @relation(fields: [testPlanId], references: [id], onDelete: Cascade)
+  testPlan TestPlan @relation(fields: [testPlanId], references: [id], onDelete: Restrict)
 
   @@index([testPlanId])
   @@index([status])
   @@index([createdAt])
+}
+
+enum RunKind {
+  test_case
+  checklist
+  test_plan
+}
+
+enum RunLifecycle {
+  in_progress
+  completed
+  cancelled
+}
+
+enum ResultStatus {
+  passed
+  failed
+  questionable
+}
+
+enum Severity {
+  low
+  medium
+  high
+  critical
+}
+
+// Immutable by database trigger. Numbered document versions belong to Phase B.
+model RunDefinitionSnapshot {
+  id String @id @default(cuid())
+  schemaVersion Int @default(1)
+  definition Json
+  contentHash String
+  createdAt DateTime @default(now())
+  run Run?
+  planItem TestPlanRunItem?
+}
+
+model Run {
+  id String @id @default(cuid())
+  projectId String
+  kind RunKind
+  testCaseId String?
+  checklistId String?
+  testPlanId String?
+  snapshotId String @unique
+  lifecycle RunLifecycle @default(in_progress)
+  autoStatus ResultStatus?
+  finalStatus ResultStatus?
+  startedAt DateTime @default(now())
+  startedById String
+  startedByEmailSnapshot String
+  startedByDisplayNameSnapshot String?
+  completedAt DateTime?
+  cancelledAt DateTime?
+  cancelledById String?
+  cancelledByEmailSnapshot String?
+  cancelledByDisplayNameSnapshot String?
+  cancelReason String?
+  durationMs BigInt?
+  revision Int @default(0)
+  idempotencyKey String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  testCase TestCase? @relation(fields: [testCaseId], references: [id], onDelete: Restrict)
+  checklist Checklist? @relation(fields: [checklistId], references: [id], onDelete: Restrict)
+  testPlan TestPlan? @relation(fields: [testPlanId], references: [id], onDelete: Restrict)
+  snapshot RunDefinitionSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
+  startedBy User @relation("RunStarter", fields: [startedById], references: [id], onDelete: Restrict)
+  cancelledBy User? @relation("RunCanceller", fields: [cancelledById], references: [id], onDelete: Restrict)
+  steps StepRunResult[]
+  attachments RunAttachment[]
+  overrides RunOverrideEvent[]
+  planItems TestPlanRunItem[] @relation("PlanRun")
+  planItem TestPlanRunItem? @relation("ChildRun")
+
+  @@unique([startedById, idempotencyKey])
+  @@index([projectId, lifecycle])
+  @@index([testCaseId, startedAt, id])
+  @@index([checklistId, startedAt, id])
+  @@index([testPlanId, startedAt, id])
+}
+
+model StepRunResult {
+  id String @id @default(cuid())
+  runId String
+  occurrenceKey String
+  result ResultStatus?
+  severity Severity?
+  actualResult String @default("")
+  updatedById String?
+  updatedByEmailSnapshot String?
+  updatedByDisplayNameSnapshot String?
+  updatedAt DateTime @updatedAt
+  revision Int @default(0)
+  run Run @relation(fields: [runId], references: [id], onDelete: Restrict)
+  updatedBy User? @relation(fields: [updatedById], references: [id], onDelete: Restrict)
+  comments StepRunComment[]
+  attachments RunAttachment[]
+  @@unique([runId, occurrenceKey])
+  @@unique([id, runId])
+  @@index([runId, result])
+}
+
+model StepRunComment {
+  id String @id @default(cuid())
+  stepRunResultId String
+  authorId String
+  authorEmailSnapshot String
+  authorDisplayNameSnapshot String?
+  body String
+  createdAt DateTime @default(now())
+  stepRunResult StepRunResult @relation(fields: [stepRunResultId], references: [id], onDelete: Restrict)
+  author User @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  @@index([stepRunResultId, createdAt])
+}
+
+model RunAttachment {
+  id String @id @default(cuid())
+  runId String
+  stepRunResultId String?
+  pathname String @unique
+  originalName String
+  contentType String
+  size Int
+  uploadedById String
+  uploadedByEmailSnapshot String
+  uploadedByDisplayNameSnapshot String?
+  createdAt DateTime @default(now())
+  run Run @relation(fields: [runId], references: [id], onDelete: Restrict)
+  stepRunResult StepRunResult? @relation(fields: [stepRunResultId, runId], references: [id, runId], onDelete: Restrict)
+  uploadedBy User @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
+  @@index([runId])
+  @@index([stepRunResultId])
+}
+
+model RunOverrideEvent {
+  id String @id @default(cuid())
+  runId String
+  autoStatus ResultStatus
+  previousFinalStatus ResultStatus
+  finalStatus ResultStatus
+  reason String
+  overriddenById String
+  overriddenByEmailSnapshot String
+  overriddenByDisplayNameSnapshot String?
+  overriddenAt DateTime @default(now())
+  run Run @relation(fields: [runId], references: [id], onDelete: Restrict)
+  overriddenBy User @relation(fields: [overriddenById], references: [id], onDelete: Restrict)
+  @@index([runId, overriddenAt])
+}
+
+model TestPlanRunItem {
+  id String @id @default(cuid())
+  planRunId String
+  position Int
+  testCaseId String?
+  checklistId String?
+  snapshotId String @unique
+  childRunId String? @unique
+  cancelledAt DateTime?
+  planRun Run @relation("PlanRun", fields: [planRunId], references: [id], onDelete: Restrict)
+  childRun Run? @relation("ChildRun", fields: [childRunId], references: [id], onDelete: Restrict)
+  snapshot RunDefinitionSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
+  testCase TestCase? @relation(fields: [testCaseId], references: [id], onDelete: Restrict)
+  checklist Checklist? @relation(fields: [checklistId], references: [id], onDelete: Restrict)
+  @@unique([planRunId, position])
 }

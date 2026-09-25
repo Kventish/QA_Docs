@@ -7,9 +7,10 @@ import { apiRequireRole } from "@/lib/api-auth";
 export const runtime = "nodejs";
 
 export async function GET() {
-  const auth = apiRequireRole("admin");
+  const auth = await apiRequireRole("admin");
   if (!auth.ok) return NextResponse.json({ error: "Unauthorized" }, { status: auth.status });
   const users = await prisma.user.findMany({
+    where: { deletedAt: null },
     orderBy: { createdAt: "desc" },
     select: { id: true, email: true, role: true, createdAt: true, updatedAt: true }
   });
@@ -24,7 +25,7 @@ const CreateSchema = z.object({
 });
 
 export async function POST(req: Request) {
-  const auth = apiRequireRole("admin");
+  const auth = await apiRequireRole("admin");
   if (!auth.ok) return NextResponse.json({ error: "Unauthorized" }, { status: auth.status });
   const json = await req.json().catch(() => null);
   const parsed = CreateSchema.safeParse(json);

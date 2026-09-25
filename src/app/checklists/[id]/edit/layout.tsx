@@ -1,13 +1,13 @@
 import { requireRoleOrRedirect } from "@/lib/rbac-server";
 
-export default function EditChecklistLayout({
+export default async function EditChecklistLayout({
   children,
   params
 }: {
   children: React.ReactNode;
   params: { id: string };
 }) {
-  requireRoleOrRedirect("editor", `/checklists/${params.id}`);
+  await requireRoleOrRedirect("editor", `/checklists/${params.id}`);
   return <>{children}</>;
 }
 

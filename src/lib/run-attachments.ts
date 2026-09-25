@@ -27,6 +27,8 @@ export async function saveRunAttachments(
   attachments: FormDataEntryValue[]
 ): Promise<RunAttachment[]> {
   const stored: RunAttachment[] = [];
+  const token = process.env.BLOB_READ_WRITE_TOKEN?.trim();
+  if (!token) throw new Error("BLOB_READ_WRITE_TOKEN is not configured for legacy Run attachments");
 
   for (const attachment of attachments) {
     if (!(attachment instanceof File)) continue;
@@ -40,7 +42,8 @@ export async function saveRunAttachments(
       {
         access: "private",
         addRandomSuffix: true,
-        contentType: attachment.type || undefined
+        contentType: attachment.type || undefined,
+        token
       }
     );
 

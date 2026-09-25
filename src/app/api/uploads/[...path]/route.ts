@@ -1,86 +1,20 @@
-import { get } from "@vercel/blob";
 import { getSession } from "@/lib/auth";
-
+import { prisma } from "@/lib/prisma";
+import { canAccessProject } from "@/lib/project-access";
+import { legacyAttachments } from "@/lib/run-engine/legacy";
+import { streamAttachment } from "@/lib/run-engine/attachments";
 export const runtime = "nodejs";
-
-export async function GET(
-  req: Request,
-  { params }: { params: { path?: string[] } }
-) {
-  const session = getSession();
-
-  if (!session) {
-    return new Response(
-      JSON.stringify({ error: "Unauthorized" }),
-      {
-        status: 401,
-        headers: { "Content-Type": "application/json" }
-      }
-    );
-  }
-
-  const segments = params.path ?? [];
-
-  if (segments.length === 0) {
-    return new Response(
-      JSON.stringify({ error: "Missing path" }),
-      {
-        status: 400,
-        headers: { "Content-Type": "application/json" }
-      }
-    );
-  }
-
-  const pathname = segments.join("/");
-
-  // Разрешаем читать только вложения прогонов.
-  if (
-    !pathname.startsWith("runs/") ||
-    pathname.includes("..")
-  ) {
-    return new Response(
-      JSON.stringify({ error: "Forbidden" }),
-      {
-        status: 403,
-        headers: { "Content-Type": "application/json" }
-      }
-    );
-  }
-
-  const result = await get(pathname, {
-    access: "private",
-    ifNoneMatch: req.headers.get("if-none-match") ?? undefined
-  });
-
-  if (!result) {
-    return new Response(
-      JSON.stringify({ error: "Not found" }),
-      {
-        status: 404,
-        headers: { "Content-Type": "application/json" }
-      }
-    );
-  }
-
-  if (result.statusCode === 304) {
-    return new Response(null, {
-      status: 304,
-      headers: {
-        ETag: result.blob.etag,
-        "Cache-Control": "private, no-cache"
-      }
-    });
-  }
-
-  return new Response(result.stream, {
-    status: 200,
-    headers: {
-      "Content-Type":
-        result.blob.contentType ?? "application/octet-stream",
-      "Content-Disposition": "inline",
-      "X-Content-Type-Options": "nosniff",
-      ETag: result.blob.etag,
-      "Cache-Control": "private, no-cache"
-    }
-  });
+export const dynamic = "force-dynamic";
+// Preserve the existing legacy URL, authorizing its actual Run/project on every request.
+export async function GET(_req: Request, { params }: { params: { path?: string[] } }) {
+  const session = await getSession();
+  if (!session) return new Response(null, { status: 401 });
+  const [prefix, runId] = params.path ?? [];
+  if (prefix !== "runs" || !runId) return new Response(null, { status: 404 });
+  const run = await prisma.testCaseRun.findUnique({ where: { id: runId }, include: { testCase: { select: { projectId: true } } } });
+  if (!run || !await canAccessProject(session, run.testCase.projectId)) return new Response(null, { status: 404 });
+  const pathname = params.path!.join("/");
+  const attachment = legacyAttachments(run.attachmentsJson, run.id).find(file => file.pathname === pathname);
+  if (!attachment) return new Response(null, { status: 404 });
+  return streamAttachment(pathname, attachment.name);
 }

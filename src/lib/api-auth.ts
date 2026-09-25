@@ -1,7 +1,7 @@
 import { getSession } from "@/lib/auth";
 
 export type ApiAuthResult =
-  | { ok: true; session: ReturnType<typeof getSession> & {} }
+  | { ok: true; session: NonNullable<Awaited<ReturnType<typeof getSession>>> }
   | { ok: false; status: 401 | 403 };
 
 function hasRequiredRole(
@@ -13,8 +13,8 @@ function hasRequiredRole(
   return userRole === "admin";
 }
 
-export function apiRequireRole(required: "admin" | "editor" | "viewer"): ApiAuthResult {
-  const session = getSession();
+export async function apiRequireRole(required: "admin" | "editor" | "viewer"): Promise<ApiAuthResult> {
+  const session = await getSession();
   if (!session) return { ok: false, status: 401 };
   if (!hasRequiredRole(session.role, required)) return { ok: false, status: 403 };
   return { ok: true, session };

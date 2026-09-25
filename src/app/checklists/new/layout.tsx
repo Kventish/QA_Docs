@@ -1,10 +1,10 @@
 import { requireRoleOrRedirect } from "@/lib/rbac-server";
 
-export default function NewChecklistLayout({
+export default async function NewChecklistLayout({
   children
 }: {
   children: React.ReactNode;
 }) {
-  requireRoleOrRedirect("editor", "/checklists");
+  await requireRoleOrRedirect("editor", "/checklists");
   return <>{children}</>;
 }

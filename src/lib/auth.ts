@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import { cookies, headers } from "next/headers";
+import { prisma } from "@/lib/prisma";
 
 export type SessionUser = {
   id: string;
@@ -58,11 +59,18 @@ export function clearSessionCookie() {
   });
 }
 
-export function getSession(): SessionUser | null {
+export async function getSession(): Promise<SessionUser | null> {
   const token = cookies().get(COOKIE_NAME)?.value;
   if (!token) return null;
   try {
-    return jwt.verify(token, getSecret()) as SessionUser;
+    const claims = jwt.verify(token, getSecret());
+    if (typeof claims === "string" || typeof claims.id !== "string") return null;
+    const user = await prisma.user.findUnique({
+      where: { id: claims.id },
+      select: { id: true, email: true, role: true, disabledAt: true, deletedAt: true }
+    });
+    if (!user || user.disabledAt || user.deletedAt) return null;
+    return { id: user.id, email: user.email, role: user.role };
   } catch {
     return null;
   }

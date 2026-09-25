@@ -1,22 +1,28 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { createContext, createElement, ReactNode, useCallback, useContext, useEffect, useState } from "react";
 import { Locale } from "@/lib/i18n/locale";
 import { getClientLocale } from "@/lib/i18n/getClientLocale";
 import { t as tBase } from "@/lib/i18n/t";
 
 const LOCALE_EVENT = "qadocs-locale-changed";
 
-export function useLocale() {
-  const [locale, setLocale] = useState<Locale>(() => getClientLocale());
+const LocaleContext = createContext<Locale | null>(null);
+
+export function LocaleProvider({ initialLocale, children }: { initialLocale: Locale; children: ReactNode }) {
+  const [locale, setLocale] = useState<Locale>(initialLocale);
 
   useEffect(() => {
     const handler = () => setLocale(getClientLocale());
-    window.addEventListener(LOCALE_EVENT, handler as any);
-    return () => window.removeEventListener(LOCALE_EVENT, handler as any);
+    window.addEventListener(LOCALE_EVENT, handler);
+    return () => window.removeEventListener(LOCALE_EVENT, handler);
   }, []);
 
-  return locale;
+  return createElement(LocaleContext.Provider, { value: locale }, children);
+}
+
+export function useLocale() {
+  return useContext(LocaleContext) ?? "en";
 }
 
 export function useT() {

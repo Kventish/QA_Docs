@@ -16,7 +16,7 @@ function slugify(input: string) {
 }
 
 export async function GET() {
-  const auth = apiRequireRole("viewer");
+  const auth = await apiRequireRole("viewer");
   if (!auth.ok) return NextResponse.json({ error: "Unauthorized" }, { status: auth.status });
 
   const accessibleIds = await getAccessibleProjectIds(auth.session);
@@ -69,7 +69,7 @@ const CreateSchema = z.object({
 });
 
 export async function POST(req: Request) {
-  const auth = apiRequireRole("editor");
+  const auth = await apiRequireRole("editor");
   if (!auth.ok) return NextResponse.json({ error: "Unauthorized" }, { status: auth.status });
 
   const json = await req.json().catch(() => null);
