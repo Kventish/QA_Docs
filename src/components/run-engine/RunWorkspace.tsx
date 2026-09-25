@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import type { RunViewJson } from "@/lib/run-engine/service";
 import { calculateStatus, documentPaths, durationText, ExecutionSeverity, Result, SnapshotStep } from "@/lib/run-engine/domain";
@@ -25,7 +26,7 @@ type SaveStatus = "idle" | "saving" | "saved" | "error" | "conflict";
 type CancelPreparation = "saved" | "discard" | "error";
 type StepSaveHandle = { flush: () => Promise<boolean>; prepareCancel: () => Promise<CancelPreparation> };
 type StepState = { result: Result | null; valid: boolean; dirty: boolean; status: SaveStatus };
-type MutationResult = { ok: boolean; error?: string };
+type MutationResult = { ok: boolean; error?: string; runId?: string };
 type AggregateMutation = (path: string, data: Record<string, unknown> | FormData, method?: string, key?: string) => Promise<MutationResult>;
 
 function sameDraft(left: StepDraft, right: StepDraft) {
@@ -52,6 +53,7 @@ function StepEditor({ definition, step, runId, canEdit, aggregateMutation, regis
   const [saveError, setSaveError] = useState("");
   const [comments, setComments] = useState(step.comments);
   const [comment, setComment] = useState("");
+  const commentRef = useRef("");
   const [commentBusy, setCommentBusy] = useState(false);
   const [commentError, setCommentError] = useState("");
   const [attachments, setAttachments] = useState(step.attachments);
@@ -68,26 +70,43 @@ function StepEditor({ definition, step, runId, canEdit, aggregateMutation, regis
     onState(step.id, {
       result: desired.result,
       valid: desired.result !== "failed" || desired.severity !== null,
-      dirty: !sameDraft(desired, savedRef.current),
+      dirty: !sameDraft(desired, savedRef.current) || Boolean(commentRef.current.trim()),
       status
     });
   }, [onState, saveStatus, step.id]);
 
-  const drain = useCallback((): Promise<boolean> => {
+  const drain = useCallback(async (): Promise<boolean> => {
     if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
-    if (queueRef.current) return queueRef.current;
-    const operation = (async () => {
-      while (!sameDraft(desiredRef.current, savedRef.current)) {
-        const draft = { ...desiredRef.current };
-        if (draft.result === "failed" && draft.severity === null) {
-          setSaveError("");
-          setSaveStatus("idle");
-          publishState("idle");
-          return false;
+    let savedAny = false;
+    while (true) {
+      const pending = queueRef.current;
+      if (pending) {
+        if (!await pending) return false;
+        continue;
+      }
+      if (sameDraft(desiredRef.current, savedRef.current)) {
+        const status: SaveStatus = savedAny ? "saved" : "idle";
+        setSaveStatus(status);
+        publishState(status);
+        if (savedAny) {
+          if (savedIndicatorRef.current) clearTimeout(savedIndicatorRef.current);
+          savedIndicatorRef.current = setTimeout(() => setSaveStatus("idle"), 1500);
         }
-        setSaveStatus("saving");
+        return true;
+      }
+
+      const draft = { ...desiredRef.current };
+      if (draft.result === "failed" && draft.severity === null) {
         setSaveError("");
-        publishState("saving");
+        setSaveStatus("idle");
+        publishState("idle");
+        return false;
+      }
+      setSaveStatus("saving");
+      setSaveError("");
+      publishState("saving");
+
+      const operation = (async () => {
         let response: Response;
         try {
           response = await fetch(`/api/v2/runs/${runId}/steps/${step.id}`, {
@@ -108,18 +127,16 @@ function StepEditor({ definition, step, runId, canEdit, aggregateMutation, regis
         }
         savedRef.current = { ...draft, revision: json.step.revision };
         onAutoStatus(json.autoStatus ?? null);
-      }
-      setSaveStatus("saved");
-      publishState("saved");
-      if (savedIndicatorRef.current) clearTimeout(savedIndicatorRef.current);
-      savedIndicatorRef.current = setTimeout(() => setSaveStatus("idle"), 1500);
-      return true;
-    })();
-    queueRef.current = operation.finally(() => {
-      queueRef.current = null;
-      publishState();
-    });
-    return queueRef.current;
+        return true;
+      })();
+      let tracked: Promise<boolean>;
+      tracked = operation.finally(() => {
+        if (queueRef.current === tracked) queueRef.current = null;
+      });
+      queueRef.current = tracked;
+      if (!await tracked) return false;
+      savedAny = true;
+    }
   }, [onAutoStatus, publishState, runId, step.id]);
 
   const schedule = useCallback((draft: StepDraft, delay: number) => {
@@ -143,6 +160,7 @@ function StepEditor({ definition, step, runId, canEdit, aggregateMutation, regis
     if (desiredRef.current.result === "failed" && desiredRef.current.severity === null) {
       setSaveStatus("idle"); publishState("idle"); return false;
     }
+    if (commentRef.current.trim()) return false;
     return drain();
   }, [drain, publishState]);
 
@@ -151,9 +169,10 @@ function StepEditor({ definition, step, runId, canEdit, aggregateMutation, regis
     const invalidDraft = desiredRef.current.result === "failed" && desiredRef.current.severity === null;
     if (invalidDraft) {
       if (queueRef.current) await queueRef.current;
-      return sameDraft(desiredRef.current, savedRef.current) ? "saved" : "discard";
+      return sameDraft(desiredRef.current, savedRef.current) && !commentRef.current.trim() ? "saved" : "discard";
     }
-    return await drain() ? "saved" : "error";
+    if (!await drain()) return "error";
+    return commentRef.current.trim() ? "discard" : "saved";
   }, [drain]);
 
   useEffect(() => {
@@ -171,7 +190,7 @@ function StepEditor({ definition, step, runId, canEdit, aggregateMutation, regis
     event.preventDefault();
     const body = comment.trim();
     if (!body || commentBusy) return;
-    setCommentBusy(true); setCommentError("");
+    setCommentBusy(true); setCommentError(""); publishState("saving");
     try {
       const response = await fetch(`/api/v2/runs/${runId}/steps/${step.id}/comments`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ body })
@@ -179,9 +198,9 @@ function StepEditor({ definition, step, runId, canEdit, aggregateMutation, regis
       const json = await response.json().catch(() => null);
       if (!response.ok) { setCommentError(json?.error ?? "serverError"); return; }
       setComments(previous => [...previous, json.comment]);
-      setComment("");
+      commentRef.current = ""; setComment("");
     } catch { setCommentError("network"); }
-    finally { setCommentBusy(false); }
+    finally { setCommentBusy(false); publishState(); }
   }
 
   async function upload(file: File) {
@@ -221,7 +240,7 @@ function StepEditor({ definition, step, runId, canEdit, aggregateMutation, regis
 
     <div className="space-y-3 border-t border-border pt-4"><h3 className="text-sm font-semibold">{r.comments}</h3>
       {comments.map(entry => <div key={entry.id} className="rounded-lg border bg-surface-2 p-3"><div className="text-xs text-text-muted">{entry.authorEmailSnapshot} · {new Date(entry.createdAt).toLocaleString(locale)}</div><p className="mt-1 whitespace-pre-wrap text-sm">{entry.body}</p></div>)}
-      {canEdit && <form onSubmit={addComment} className="space-y-2"><textarea aria-label={r.comments} className={`${inputClass} min-h-20`} maxLength={10000} value={comment} onChange={event => setComment(event.target.value)} /><button className={buttonClass} disabled={commentBusy || !comment.trim()}>{commentBusy ? r.saving : r.addComment}</button>{commentError && <p className="text-sm text-red-400">{runErrorLabel(commentError, r)}</p>}</form>}
+      {canEdit && <form onSubmit={addComment} className="space-y-2"><textarea aria-label={r.comments} className={`${inputClass} min-h-20`} maxLength={10000} value={comment} onChange={event => { commentRef.current = event.target.value; setComment(event.target.value); publishState(); }} /><button className={buttonClass} disabled={commentBusy || !comment.trim()}>{commentBusy ? r.saving : r.addComment}</button>{commentError && <p className="text-sm text-red-400">{runErrorLabel(commentError, r)}</p>}</form>}
     </div>
 
     <div className="space-y-3 border-t border-border pt-4"><h3 className="text-sm font-semibold">{r.attachments}</h3>
@@ -235,6 +254,7 @@ function StepEditor({ definition, step, runId, canEdit, aggregateMutation, regis
 }
 
 export default function RunWorkspace({ runId }: { runId: string }) {
+  const router = useRouter();
   const locale = useLocale();
   const r = runLabels[locale];
   const [run, setRun] = useState<RunViewJson | null>(null);
@@ -253,6 +273,8 @@ export default function RunWorkspace({ runId }: { runId: string }) {
   const [cancelReason, setCancelReason] = useState("");
   const [runUploading, setRunUploading] = useState(false);
   const [runUploadError, setRunUploadError] = useState("");
+  const [nextBusy, setNextBusy] = useState(false);
+  const [nextError, setNextError] = useState("");
 
   const accept = useCallback((next: RunViewJson, resetSteps = false) => {
     clockOffset.current = Date.now() - Date.parse(next.serverNow);
@@ -303,8 +325,7 @@ export default function RunWorkspace({ runId }: { runId: string }) {
         setError(code); return { ok: false, error: code };
       }
       if (json.run) accept(json.run);
-      if (json.runId) window.location.assign(`/runs/${json.runId}`);
-      return { ok: true };
+      return { ok: true, runId: typeof json.runId === "string" ? json.runId : undefined };
     } catch { setError("network"); return { ok: false, error: "network" }; }
     finally { aggregateBusyRef.current = false; setAggregateBusy(false); }
   }, [accept, runId]);
@@ -326,6 +347,43 @@ export default function RunWorkspace({ runId }: { runId: string }) {
     if (preparations.includes("discard") && !confirm(r.cancelDiscardWarning)) return false;
     return (await aggregateMutation("/cancel", { reason: cancelReason })).ok;
   }, [aggregateMutation, cancelReason, r.cancelDiscardWarning]);
+
+  const navigateSafely = useCallback(async (path: string) => {
+    const current = runRef.current;
+    if (!current) return;
+    if (current.lifecycle === "in_progress" && current.canEdit) {
+      const preparations = await Promise.all([...saveHandles.current.values()].map(handle => handle.prepareCancel()));
+      if (preparations.includes("error")) { setError("autosaveFailed"); return; }
+      if (preparations.includes("discard") && !confirm(r.navigateDiscardWarning)) return;
+    }
+    router.push(path);
+  }, [r.navigateDiscardWarning, router]);
+
+  const openNextPlanItem = useCallback(async () => {
+    const context = runRef.current?.planContext;
+    const next = context?.nextActionable;
+    if (!context || !next || nextBusy) return;
+    setNextBusy(true); setNextError("");
+    try {
+      if (next.childRunId) {
+        router.push(`/runs/${next.childRunId}`);
+        return;
+      }
+      const storageKey = `run-item-start:${next.id}`;
+      const key = sessionStorage.getItem(storageKey) ?? crypto.randomUUID();
+      sessionStorage.setItem(storageKey, key);
+      const response = await fetch(`/api/v2/runs/${context.planRunId}/items/${next.id}/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Idempotency-Key": key },
+        body: JSON.stringify({ revision: context.planRevision })
+      });
+      const json = await response.json().catch(() => null);
+      if (!response.ok) { setNextError(json?.error ?? "serverError"); return; }
+      sessionStorage.removeItem(storageKey);
+      router.push(`/runs/${json.runId}`);
+    } catch { setNextError("network"); }
+    finally { setNextBusy(false); }
+  }, [nextBusy, router]);
 
   const conflict = ["conflict", "closed", "unauthorized", "forbidden"].includes(error);
   function resultFor(stepId: string, fallback: Result | null) { return stepStates[stepId]?.result ?? fallback; }
@@ -351,6 +409,13 @@ export default function RunWorkspace({ runId }: { runId: string }) {
   const canComplete = Boolean(run && (run.kind === "test_plan"
     ? run.planItems.length > 0 && run.planItems.every(item => ["passed", "failed", "questionable"].includes(item.state))
     : run.steps.length > 0 && run.steps.every(step => Boolean(stepStates[step.id]?.valid && stepStates[step.id]?.result))));
+  const planCounts = run?.kind === "test_plan" ? run.planItems.reduce((counts, item) => {
+    counts[item.state] += 1;
+    return counts;
+  }, { passed: 0, failed: 0, questionable: 0, in_progress: 0, not_started: 0, cancelled: 0 }) : null;
+  const planCompleted = planCounts ? planCounts.passed + planCounts.failed + planCounts.questionable : 0;
+  const planRemaining = planCounts ? planCounts.in_progress + planCounts.not_started : 0;
+  const planPercent = run?.kind === "test_plan" && run.planItems.length ? Math.round(planCompleted / run.planItems.length * 100) : 0;
 
   async function uploadRunFile(file: File) {
     setRunUploading(true); setRunUploadError("");
@@ -366,9 +431,17 @@ export default function RunWorkspace({ runId }: { runId: string }) {
       if (await load()) setEpoch(value => value + 1);
     }}>{r.reload}</button></div>}
     {!run ? <p>{r.loading}</p> : <>
+      {run.planContext && <section className="sticky top-3 z-10 rounded-xl border border-brand-500/40 bg-surface-1/95 p-4 shadow-soft backdrop-blur">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0"><button className="text-sm font-medium text-brand-500 hover:text-brand-400" onClick={() => void navigateSafely(`/runs/${run.planContext!.planRunId}`)}>← {run.planContext.planTitle}</button>
+            <div className="mt-2 flex flex-wrap items-center gap-2"><span className="text-sm text-text-muted">{r.planElement} {run.planContext.position} {r.of} {run.planContext.total}</span><span className="rounded-full border bg-surface-2 px-2 py-1 text-xs font-medium">{r.itemKinds[run.planContext.itemKind]}</span></div>
+          </div>
+          <button className={buttonClass} onClick={() => void navigateSafely(`/runs/${run.planContext!.planRunId}`)}>{r.returnToPlan}</button>
+        </div>
+      </section>}
       <header className="space-y-5 rounded-xl border bg-surface-1 p-5 shadow-soft sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-500">{r.runDetails}</p><h1 className="mt-2 text-2xl font-semibold">{run.definition.title}</h1><p className="mt-1 text-sm text-text-muted">{r.snapshot}</p></div><div className="flex flex-wrap items-center gap-2"><span className={`rounded-full border px-2 py-1 text-xs font-medium ${statusClass(run.finalStatus ?? run.autoStatus)}`}>{run.finalStatus || run.autoStatus ? r.states[(run.finalStatus ?? run.autoStatus)!] : r.states.not_started}</span><span className={`rounded-full border px-2 py-1 text-xs font-medium ${statusClass(run.lifecycle)}`}>{r.states[run.lifecycle]}</span><span className="rounded-lg border bg-surface-2 px-3 py-2 font-mono text-lg font-semibold">{durationText(run.durationMs ?? (clock - clockOffset.current - Date.parse(run.startedAt)))}</span></div></div>
-        <nav className="flex flex-wrap gap-3"><Link className={buttonClass} href={`/${documentPaths[run.kind]}/${run.definition.documentId}`}>{r.back}</Link><Link className={buttonClass} href={`/${documentPaths[run.kind]}/${run.definition.documentId}/runs`}>{r.history}</Link>{run.parentRunId && <Link className={buttonClass} href={`/runs/${run.parentRunId}`}>{r.parent}</Link>}</nav>
+        <nav className="flex flex-wrap gap-3"><button className={buttonClass} onClick={() => void navigateSafely(`/${documentPaths[run.kind]}/${run.definition.documentId}`)}>{r.back}</button><button className={buttonClass} onClick={() => void navigateSafely(`/${documentPaths[run.kind]}/${run.definition.documentId}/runs`)}>{r.history}</button>{run.parentRunId && !run.planContext && <button className={buttonClass} onClick={() => void navigateSafely(`/runs/${run.parentRunId}`)}>{r.parent}</button>}</nav>
         <dl className="grid gap-4 border-t border-border pt-4 text-sm sm:grid-cols-3"><div><dt>{r.user}</dt><dd>{run.startedByEmailSnapshot}</dd></div><div><dt>{r.date}</dt><dd>{date(run.startedAt)}</dd></div><div><dt>{r.lifecycle}</dt><dd>{r.states[run.lifecycle]}</dd></div><div><dt>{r.duration}</dt><dd className="font-mono">{durationText(run.durationMs ?? (clock - clockOffset.current - Date.parse(run.startedAt)))}</dd></div><div><dt>{r.auto}</dt><dd>{run.autoStatus ? r.states[run.autoStatus] : "—"}</dd></div><div><dt>{r.final}</dt><dd>{run.finalStatus ? r.states[run.finalStatus] : "—"}</dd></div></dl>
         {run.lifecycle === "in_progress" && <p className="text-xs text-text-muted">{r.timerHint}</p>}
         {run.cancelledAt && <p>{r.states.cancelled}: {date(run.cancelledAt)} · {run.cancelledByEmailSnapshot}<br />{r.cancelledReason}: {run.cancelReason}</p>}
@@ -381,15 +454,26 @@ export default function RunWorkspace({ runId }: { runId: string }) {
 
       {(["description", "preconditions", "postconditions", "expected", "objective", "scope"] as const).map(key => run.definition[key] ? <section key={key} className="rounded-xl border bg-surface-1 p-5 shadow-soft"><h2 className="text-sm font-semibold">{r[key]}</h2><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-text-muted">{run.definition[key]}</p></section> : null)}
       {renderSteps(run.definition.steps)}
-      {run.kind === "test_plan" && <section className="space-y-3"><h2 className="font-semibold">{r.planItems}</h2>{run.planItems.map(item => <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-surface-1 p-4"><div>{item.title}<p className="text-sm text-text-muted">{r.states[item.state]}</p></div>{item.childRunId ? <Link className={buttonClass} href={`/runs/${item.childRunId}`}>{item.state === "in_progress" && item.canResume ? r.resume : r.view}</Link> : run.canEdit && item.state === "not_started" ? <button className={buttonClass} disabled={aggregateBusy || conflict} onClick={() => {
-        const storageKey = `run-item-start:${item.id}`; const key = sessionStorage.getItem(storageKey) ?? crypto.randomUUID(); sessionStorage.setItem(storageKey, key); void aggregateMutation(`/items/${item.id}/start`, {}, "POST", key);
-      }}>{r.start}</button> : null}</div>)}</section>}
+      {run.kind === "test_plan" && planCounts && <section className="space-y-5">
+        <div className="space-y-4 rounded-xl border bg-surface-1 p-5 shadow-soft"><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-semibold">{r.executionProgress}</h2><span className="text-sm font-medium">{planCompleted} / {run.planItems.length} {r.completedShort}</span></div>
+          <div className="h-2 overflow-hidden rounded-full bg-surface-2"><div className="h-full rounded-full bg-brand-500 transition-all" style={{ width: `${planPercent}%` }} /></div>
+          <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-5"><div><dt className="text-text-muted">{r.states.passed}</dt><dd className="mt-1 font-semibold">{planCounts.passed}</dd></div><div><dt className="text-text-muted">{r.states.failed}</dt><dd className="mt-1 font-semibold">{planCounts.failed}</dd></div><div><dt className="text-text-muted">{r.states.questionable}</dt><dd className="mt-1 font-semibold">{planCounts.questionable}</dd></div><div><dt className="text-text-muted">{r.remaining}</dt><dd className="mt-1 font-semibold">{planRemaining}</dd></div><div><dt className="text-text-muted">{r.states.cancelled}</dt><dd className="mt-1 font-semibold">{planCounts.cancelled}</dd></div></dl>
+        </div>
+        {planCounts.in_progress > 0 && <div className="space-y-3 rounded-xl border border-brand-500/40 bg-brand-500/5 p-5"><h2 className="font-semibold">{r.unfinishedRuns}</h2>{run.planItems.filter(item => item.state === "in_progress").map(item => <div key={item.id} className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-medium">{item.title}</p><p className="text-xs text-text-muted">{r.itemKinds[item.kind]}{item.executor ? ` · ${item.executor}` : ""}</p></div>{item.childRunId && <Link className={primaryClass} href={`/runs/${item.childRunId}`}>{item.canResume ? r.continueRun : r.view}</Link>}</div>)}</div>}
+        <div className="space-y-3"><h2 className="font-semibold">{r.planItems}</h2>{run.planItems.map(item => <div key={item.id} className="flex flex-col gap-3 rounded-xl border bg-surface-1 p-4 shadow-soft sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{item.title}</p><span className={`rounded-full border px-2 py-1 text-xs font-medium ${statusClass(item.state)}`}>{r.states[item.state]}</span><span className="rounded-full border bg-surface-2 px-2 py-1 text-xs text-text-muted">{r.itemKinds[item.kind]}</span></div>{item.executor && <p className="mt-2 text-xs text-text-muted">{r.user}: {item.executor}{item.startedAt ? ` · ${r.duration}: ${durationText(item.durationMs ?? (clock - Date.parse(item.startedAt)))}` : ""}</p>}</div>{item.childRunId ? <Link className={buttonClass} href={`/runs/${item.childRunId}`}>{item.state === "in_progress" && item.canResume ? r.resume : r.view}</Link> : run.canEdit && item.state === "not_started" ? <button className={buttonClass} disabled={aggregateBusy || conflict} onClick={() => {
+          const storageKey = `run-item-start:${item.id}`; const key = sessionStorage.getItem(storageKey) ?? crypto.randomUUID(); sessionStorage.setItem(storageKey, key); void (async () => {
+            const result = await aggregateMutation(`/items/${item.id}/start`, {}, "POST", key);
+            if (result.ok && result.runId) { sessionStorage.removeItem(storageKey); router.push(`/runs/${result.runId}`); }
+          })();
+        }}>{r.start}</button> : null}</div>)}</div>
+      </section>}
 
       {(run.canEdit || run.canOverride) && <section className="space-y-4 rounded-xl border bg-surface-1 p-5 shadow-soft">
         {run.canEdit && <label className="flex gap-2"><input type="checkbox" checked={manual} disabled={aggregateBusy} onChange={event => setManual(event.target.checked)} />{r.override}</label>}
         {(manual || run.canOverride) && <div className="space-y-3"><label>{r.final}<select className={inputClass} value={finalStatus} disabled={aggregateBusy} onChange={event => setFinalStatus(event.target.value as Result)}>{(["passed", "failed", "questionable"] as const).map(value => <option key={value} value={value}>{r.states[value]}</option>)}</select></label><label className="block">{r.reason}<textarea className={inputClass} maxLength={5000} disabled={aggregateBusy} value={reason} onChange={event => setReason(event.target.value)} /></label></div>}
         {run.canEdit ? <><button className={primaryClass} disabled={aggregateBusy || conflict || !canComplete || (manual && !reason.trim())} onClick={() => void completeMutation(manual ? { override: { finalStatus, reason } } : {})}>{aggregateBusy ? r.saving : r.complete}</button>{!canComplete && <p className="text-sm text-text-muted">{r.incomplete}</p>}<label className="block">{r.cancelledReason}<textarea className={inputClass} maxLength={5000} disabled={aggregateBusy} value={cancelReason} onChange={event => setCancelReason(event.target.value)} /></label><button className={buttonClass} disabled={aggregateBusy || conflict || !cancelReason.trim()} onClick={() => void cancelMutation()}>{r.cancel}</button></> : <button className={buttonClass} disabled={aggregateBusy || conflict || !reason.trim()} onClick={() => void aggregateMutation("/overrides", { finalStatus, reason })}>{r.applyOverride}</button>}
       </section>}
+      {run.planContext && run.lifecycle === "completed" && <section className="space-y-4 rounded-xl border border-emerald-500/40 bg-emerald-500/5 p-5 shadow-soft"><div><h2 className="text-lg font-semibold">{r.childCompleted}</h2><p className="mt-1 text-sm text-text-muted">{r.result}: {run.finalStatus ? r.states[run.finalStatus] : r.unknown}</p></div>{run.planContext.allProcessed && <p className="text-sm text-emerald-400">{r.allPlanItemsProcessed}</p>}<div className="flex flex-wrap gap-3">{run.planContext.nextActionable ? <><button className={primaryClass} disabled={nextBusy} onClick={() => void openNextPlanItem()}>{nextBusy ? r.loading : r.completeAndNext}</button><button className={buttonClass} onClick={() => void navigateSafely(`/runs/${run.planContext!.planRunId}`)}>{r.returnToPlan}</button></> : <button className={primaryClass} onClick={() => void navigateSafely(`/runs/${run.planContext!.planRunId}`)}>{r.returnToPlan}</button>}</div>{nextError && <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-400"><p>{r.nextOpenFailed}</p><p>{runErrorLabel(nextError, r)}</p></div>}</section>}
       {run.overrides.length > 0 && <section className="space-y-3 rounded-xl border p-5"><h2 className="font-semibold">{r.audit}</h2>{run.overrides.map(event => <div key={event.id} className="border-t pt-3"><p>{date(event.overriddenAt)} · {event.overriddenByEmailSnapshot}</p><p>{r.auto}: {r.states[event.autoStatus]} · {r.previous}: {r.states[event.previousFinalStatus]} → {r.final}: {r.states[event.finalStatus]}</p><p className="whitespace-pre-wrap">{event.reason}</p></div>)}</section>}
     </>}
   </div>;

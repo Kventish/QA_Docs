@@ -4,38 +4,40 @@ import { SessionUser } from "@/lib/auth";
 import { calculateStatus, DefinitionSnapshot, executionSeverity, Kind, leafSteps, planItemState, Result, RunError, ExecutionSeverity } from "./domain";
 import { captureDefinition, storeSnapshot } from "./snapshot";
 
+type DbClient = Pick<Prisma.TransactionClient,
+  "user" | "userProjectAccess" | "run" | "testCase" | "checklist" | "testPlan">;
 type Tx = Prisma.TransactionClient;
 const transactionOptions = { maxWait: 5000, timeout: 20000 };
 const documentWhere = (kind: Kind, id: string) => kind === "test_case" ? { testCaseId: id } : kind === "checklist" ? { checklistId: id } : { testPlanId: id };
 export { documentWhere };
 
-export async function currentActor(tx: Tx, session: SessionUser): Promise<SessionUser> {
-  const user = await tx.user.findUnique({ where: { id: session.id } });
+export async function currentActor(db: DbClient, session: SessionUser): Promise<SessionUser> {
+  const user = await db.user.findUnique({ where: { id: session.id } });
   if (!user || user.disabledAt || user.deletedAt) throw new RunError("unauthorized", 401);
   return { id: user.id, email: user.email, role: user.role };
 }
 
-export async function projectAccess(tx: Tx, actor: SessionUser, projectId: string) {
-  if (actor.role === "viewer" && !await tx.userProjectAccess.findUnique({ where: { userId_projectId: { userId: actor.id, projectId } } })) {
+export async function projectAccess(db: DbClient, actor: SessionUser, projectId: string) {
+  if (actor.role === "viewer" && !await db.userProjectAccess.findUnique({ where: { userId_projectId: { userId: actor.id, projectId } } })) {
     throw new RunError("forbidden", 403);
   }
 }
 
-export async function documentAccess(kind: Kind, id: string, session: SessionUser, tx: Tx = prisma) {
-  const actor = await currentActor(tx, session);
-  const document = kind === "test_case" ? await tx.testCase.findUnique({ where: { id } })
-    : kind === "checklist" ? await tx.checklist.findUnique({ where: { id } })
-    : await tx.testPlan.findUnique({ where: { id } });
+export async function documentAccess(kind: Kind, id: string, session: SessionUser, db: DbClient = prisma) {
+  const actor = await currentActor(db, session);
+  const document = kind === "test_case" ? await db.testCase.findUnique({ where: { id } })
+    : kind === "checklist" ? await db.checklist.findUnique({ where: { id } })
+    : await db.testPlan.findUnique({ where: { id } });
   if (!document) throw new RunError("notFound", 404);
-  await projectAccess(tx, actor, document.projectId);
+  await projectAccess(db, actor, document.projectId);
   return document;
 }
 
-export async function runAccess(tx: Tx, id: string, session: SessionUser, write = false) {
-  const actor = await currentActor(tx, session);
-  const run = await tx.run.findUnique({ where: { id } });
+export async function runAccess(db: DbClient, id: string, session: SessionUser, write = false) {
+  const actor = await currentActor(db, session);
+  const run = await db.run.findUnique({ where: { id } });
   if (!run) throw new RunError("notFound", 404);
-  await projectAccess(tx, actor, run.projectId);
+  await projectAccess(db, actor, run.projectId);
   if (write && (actor.role === "viewer" || (actor.role !== "admin" && run.startedById !== actor.id))) throw new RunError("forbidden", 403);
   return { run, actor };
 }
@@ -243,6 +245,10 @@ export async function cancelRun(id: string, revision: number, reason: string, se
 export async function startPlanItem(id: string, itemId: string, revision: number, key: string, session: SessionUser) {
   // A lost successful response may be retried even with its original parent revision.
   const prior = await prisma.testPlanRunItem.findFirst({ where: { id: itemId, planRunId: id }, include: { childRun: true } });
+  if (prior?.childRun?.lifecycle === "in_progress") {
+    await runAccess(prisma, prior.childRun.id, session);
+    return prior.childRun.id;
+  }
   if (prior?.childRun?.startedById === session.id && prior.childRun.idempotencyKey === key) {
     await runAccess(prisma, prior.childRun.id, session);
     return prior.childRun.id;
@@ -259,38 +265,76 @@ export async function startPlanItem(id: string, itemId: string, revision: number
 }
 
 export async function getRun(id: string, session: SessionUser) {
-  // Repeatable read keeps revision and its dependent step/comment rows consistent.
-  return prisma.$transaction(async tx => {
-    const { actor } = await runAccess(tx, id, session);
-    const run = await tx.run.findUniqueOrThrow({ where: { id }, include: {
+  // This is a UI read model; it does not require an interactive transaction.
+  const { actor } = await runAccess(prisma, id, session);
+  const run = await prisma.run.findUniqueOrThrow({ where: { id }, include: {
       snapshot: true,
       attachments: { where: { stepRunResultId: null }, orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         select: { id: true, originalName: true, contentType: true, size: true, uploadedByEmailSnapshot: true, createdAt: true } },
       steps: { include: { comments: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
         attachments: { select: { id: true, originalName: true, contentType: true, size: true, uploadedByEmailSnapshot: true, createdAt: true } } } },
       overrides: { orderBy: [{ overriddenAt: "asc" }, { id: "asc" }] },
-      planItem: { include: { planRun: { select: { id: true, lifecycle: true } } } },
+      planItem: { include: { planRun: { include: {
+        snapshot: true,
+        planItems: { orderBy: { position: "asc" }, include: {
+          snapshot: true,
+          childRun: { select: { id: true, lifecycle: true, finalStatus: true } }
+        } }
+      } } } },
       planItems: { orderBy: { position: "asc" }, include: {
-        snapshot: true, childRun: { select: { id: true, lifecycle: true, finalStatus: true, autoStatus: true, startedById: true } }
+        snapshot: true, childRun: { select: {
+          id: true, lifecycle: true, finalStatus: true, autoStatus: true, startedById: true,
+          startedByEmailSnapshot: true, startedAt: true, durationMs: true
+        } }
       } }
     } });
     const parentOpen = !run.planItem || run.planItem.planRun.lifecycle === "in_progress";
     const canEdit = parentOpen && run.lifecycle === "in_progress" && actor.role !== "viewer" && (actor.role === "admin" || run.startedById === actor.id);
-    return {
+    let planContext = null;
+    if (run.planItem) {
+      const parent = run.planItem.planRun;
+      const items = parent.planItems.map(item => ({
+        id: item.id,
+        position: item.position,
+        title: (item.snapshot.definition as unknown as DefinitionSnapshot).title,
+        kind: item.testCaseId ? "test_case" as const : "checklist" as const,
+        childRunId: item.childRunId,
+        state: planItemState(item)
+      }));
+      const currentIndex = items.findIndex(item => item.id === run.planItem!.id);
+      const searchOrder = currentIndex < 0 ? items : [...items.slice(currentIndex + 1), ...items.slice(0, currentIndex)];
+      const nextActionable = searchOrder.find(item => item.state === "in_progress" || item.state === "not_started") ?? null;
+      planContext = {
+        planRunId: parent.id,
+        planRevision: parent.revision,
+        planTitle: (parent.snapshot.definition as unknown as DefinitionSnapshot).title,
+        itemId: run.planItem.id,
+        position: currentIndex >= 0 ? currentIndex + 1 : run.planItem.position + 1,
+        total: items.length,
+        itemKind: run.kind,
+        previousItem: currentIndex > 0 ? items[currentIndex - 1] : null,
+        nextActionable,
+        allProcessed: items.every(item => item.state === "passed" || item.state === "failed" || item.state === "questionable" || item.state === "cancelled")
+      };
+    }
+  return {
       ...run, durationMs: run.durationMs === null ? null : Number(run.durationMs),
       definition: run.snapshot.definition as unknown as DefinitionSnapshot,
       canEdit, canOverride: parentOpen && actor.role === "admin" && run.lifecycle === "completed",
       parentRunId: run.planItem?.planRunId ?? null,
+      planContext,
       planItems: run.planItems.map(item => ({
         id: item.id, position: item.position, childRunId: item.childRunId,
         title: (item.snapshot.definition as unknown as DefinitionSnapshot).title,
         kind: item.testCaseId ? "test_case" as const : "checklist" as const,
         state: planItemState(item),
-        canResume: Boolean(item.childRun && (actor.role === "admin" || item.childRun.startedById === actor.id))
+        canResume: Boolean(item.childRun && (actor.role === "admin" || item.childRun.startedById === actor.id)),
+        executor: item.childRun?.startedByEmailSnapshot ?? null,
+        startedAt: item.childRun?.startedAt.toISOString() ?? null,
+        durationMs: item.childRun?.durationMs === null || item.childRun?.durationMs === undefined ? null : Number(item.childRun.durationMs)
       })),
       snapshot: undefined, planItem: undefined, serverNow: new Date().toISOString()
-    };
-  }, { ...transactionOptions, isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+  };
 }
 
 export type RunView = Awaited<ReturnType<typeof getRun>>;
