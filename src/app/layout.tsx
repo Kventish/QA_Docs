@@ -5,6 +5,7 @@ import { AppShell } from "@/components/app-shell/AppShell";
 import { LocaleProvider } from "@/lib/i18n/useT";
 import { getServerLocale } from "@/lib/i18n/getServerLocale";
 import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const inter = Inter({ subsets: ["latin", "cyrillic"] });
 
@@ -22,6 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <LocaleProvider initialLocale={locale}>
           <AppShell>{children}</AppShell>
           <Analytics />
+          <SpeedInsights />
         </LocaleProvider>
       </body>
     </html>
