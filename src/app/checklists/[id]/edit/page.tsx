@@ -12,7 +12,6 @@ type Checklist = {
   status: "draft" | "active" | "archived";
   tags: string[];
   itemsJson?: unknown;
-  jiraIssueKey?: string | null;
 };
 type Project = { id: string; name: string; slug: string };
 
@@ -39,7 +38,6 @@ export default function EditChecklistPage({ params }: { params: { id: string } }
   const [title, setTitle] = useState("");
   const [status, setStatus] = useState<Checklist["status"]>("draft");
   const [tags, setTags] = useState("");
-  const [jiraIssueKey, setJiraIssueKey] = useState("");
   const [items, setItems] = useState<Item[]>([{ ...emptyItem }]);
 
   const t = useT();
@@ -67,7 +65,6 @@ export default function EditChecklistPage({ params }: { params: { id: string } }
         setTitle(cl.title ?? "");
         setStatus(cl.status ?? "draft");
         setTags((cl.tags ?? []).join(", "));
-        setJiraIssueKey(cl.jiraIssueKey ?? "");
         setItems(parseItems(cl));
       })
       .catch((r) => {
@@ -119,8 +116,7 @@ export default function EditChecklistPage({ params }: { params: { id: string } }
           .split(",")
           .map((t) => t.trim())
           .filter(Boolean),
-        items,
-        jiraIssueKey: jiraIssueKey.trim() === "" ? null : jiraIssueKey.trim()
+        items
       })
     }).catch(() => null);
 
@@ -208,16 +204,6 @@ export default function EditChecklistPage({ params }: { params: { id: string } }
                 onChange={(e) => setTags(e.target.value)}
               />
             </div>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-sm text-text-muted">{t("jira.issueKeyLabel")}</label>
-            <input
-              className="w-full rounded-lg border bg-surface-2 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500"
-              value={jiraIssueKey}
-              onChange={(e) => setJiraIssueKey(e.target.value)}
-              placeholder={t("jira.issueKeyPlaceholder")}
-            />
           </div>
 
           <div className="space-y-2">
@@ -325,4 +311,3 @@ export default function EditChecklistPage({ params }: { params: { id: string } }
     </div>
   );
 }
-

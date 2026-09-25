@@ -2,7 +2,7 @@ services:
   app:
     build: .
     restart: unless-stopped
-    # Подхватывает JIRA_* и прочее из .env. Явный `environment` ниже перекрывает совпадающие ключи
+    # Подхватывает переменные из .env. Явный `environment` ниже перекрывает совпадающие ключи
     # (например DATABASE_URL должен указывать на сервис db, а не localhost).
     env_file:
       - .env

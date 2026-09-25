@@ -3,7 +3,6 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { apiRequireRole } from "@/lib/api-auth";
 import { canAccessProject } from "@/lib/project-access";
-import { isValidJiraIssueKey, normalizeJiraIssueKey } from "@/lib/jira-keys";
 
 export const runtime = "nodejs";
 
@@ -17,8 +16,7 @@ const PatchSchema = z.object({
   title: z.string().min(1).optional(),
   status: z.enum(["draft", "active", "archived"]).optional(),
   tags: z.array(z.string()).optional(),
-  items: z.array(ItemSchema).optional(),
-  jiraIssueKey: z.union([z.string(), z.null()]).optional()
+  items: z.array(ItemSchema).optional()
 });
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
@@ -44,12 +42,6 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  if (parsed.data.jiraIssueKey !== undefined && parsed.data.jiraIssueKey !== null && parsed.data.jiraIssueKey !== "") {
-    if (!isValidJiraIssueKey(parsed.data.jiraIssueKey)) {
-      return NextResponse.json({ error: "Invalid Jira issue key format" }, { status: 400 });
-    }
-  }
-
   if (parsed.data.projectId !== undefined) {
     const project = await prisma.project.findUnique({ where: { id: parsed.data.projectId } });
     if (!project) {
@@ -63,12 +55,6 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (parsed.data.status !== undefined) data.status = parsed.data.status;
   if (parsed.data.tags !== undefined) data.tags = parsed.data.tags;
   if (parsed.data.items !== undefined) data.itemsJson = parsed.data.items as unknown as object[];
-  if (parsed.data.jiraIssueKey !== undefined) {
-    const v = parsed.data.jiraIssueKey;
-    data.jiraIssueKey =
-      v === null || v === "" ? null : normalizeJiraIssueKey(v);
-  }
-
   await prisma.checklist.update({
     where: { id: params.id },
     data

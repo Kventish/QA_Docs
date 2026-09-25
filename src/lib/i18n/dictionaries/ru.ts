@@ -40,23 +40,6 @@ export const ru = {
     filtersNeedProject: "Сначала создайте проект…",
     noProjectsTableHint: "Нет проектов. Создайте проект в разделе «Проекты»."
   },
-  jira: {
-    sectionTitle: "Jira",
-    linkedIssue: "Связанная задача",
-    openInJira: "Открыть в Jira",
-    noIssueYet: "Задача в Jira ещё не создана.",
-    createInJira: "Создать задачу в Jira",
-    createFailed: "Не удалось создать задачу в Jira",
-    alreadyLinked: "Уже связано с задачей Jira",
-    notConfigured: "Интеграция Jira не настроена (задайте JIRA_* и JIRA_PROJECT_KEY в .env).",
-    issueKeyLabel: "Ключ задачи Jira",
-    issueKeyPlaceholder: "SCRUM-1",
-    epicKeyLabel: "Ключ Epic (родитель для новых задач)",
-    projectKeyLabel: "Ключ проекта Jira",
-    epicKeyPlaceholder: "SCRUM-1",
-    saveJiraSettings: "Сохранить настройки Jira",
-    jiraSettingsSaved: "Настройки Jira сохранены"
-  },
   // Note: column labels are reused across pages
   nav: {
     dashboard: "Дашборд",
@@ -135,7 +118,6 @@ export const ru = {
     noIncludedChecklists: "Чек-листы не включены.",
     createdAt: "Дата",
     attachments: "Вложения",
-    jira: "Jira",
     sectionSteps: "Шаги прогона",
     sectionAttachments: "Вложения к прогону",
     sectionChecklistItems: "Пункты прогона",
@@ -163,9 +145,7 @@ export const ru = {
     deleteFailed: "Не удалось удалить проект",
     deleteProject: "Удалить проект",
     coverage: "Покрытие",
-    empty: "Нет проектов.",
-    jiraIntegration: "Интеграция Jira",
-    jiraSaveFailed: "Не удалось сохранить настройки Jira"
+    empty: "Нет проектов."
   },
   testCases: {
     title: "Тест-кейсы",
@@ -412,4 +392,3 @@ export const ru = {
     cannotDeleteCurrentUser: "Нельзя удалить текущего пользователя"
   }
 } as const;
-

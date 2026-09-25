@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useLocale, useT } from "@/lib/i18n/useT";
-import ProjectJiraForm from "./project-jira-form";
 
 type Project = {
   id: string;
@@ -10,8 +9,6 @@ type Project = {
   slug: string;
   createdAt: string;
   updatedAt: string;
-  jiraProjectKey?: string | null;
-  jiraEpicKey?: string | null;
   testCaseCount: number;
   checklistCount: number;
   testPlanCount: number;
@@ -202,13 +199,6 @@ export default function ProjectsPage() {
                 {new Date(p.updatedAt).toLocaleString(locale === "ru" ? "ru-RU" : "en-US")}
               </div>
             </div>
-            {canEdit ? (
-              <ProjectJiraForm
-                projectId={p.id}
-                initialProjectKey={p.jiraProjectKey ?? null}
-                initialEpicKey={p.jiraEpicKey ?? null}
-              />
-            ) : null}
           </div>
         ))}
         {!loading && projects.length === 0 ? (

@@ -7,8 +7,6 @@ import { getServerLocale } from "@/lib/i18n/getServerLocale";
 import { t } from "@/lib/i18n/t";
 import AttachmentViewer from "@/components/AttachmentViewer";
 import { flattenTestCaseSteps } from "@/lib/test-case-includes";
-import JiraRunIssueActions from "@/components/JiraRunIssueActions";
-import { getJiraConfig, jiraBrowseUrl } from "@/lib/jira";
 
 export const dynamic = "force-dynamic";
 
@@ -32,8 +30,6 @@ type TestPlanRunDetail = {
 export default async function TestPlanRunDetailPage({ params }: { params: { id: string; runId: string } }) {
   const session = requireRoleOrRedirect("viewer", `/test-plans/${params.id}/runs/${params.runId}`);
   const locale = getServerLocale();
-  const jiraCfg = getJiraConfig();
-  const canEdit = (session as any)?.role === "editor" || (session as any)?.role === "admin";
   const run = await (prisma as any).testPlanRun.findUnique({
     where: { id: params.runId },
     include: { testPlan: true }
@@ -86,15 +82,6 @@ export default async function TestPlanRunDetailPage({ params }: { params: { id: 
           <div className="mt-2 text-sm text-text-muted">{t("runHistory.descriptionTestPlan", { locale })}</div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <JiraRunIssueActions
-            entity="testPlanRun"
-            runId={run.id}
-            issueKey={(run as any).jiraIssueKey ?? null}
-            browseUrl={(run as any).jiraIssueKey && jiraCfg ? jiraBrowseUrl(jiraCfg.baseUrl, (run as any).jiraIssueKey) : null}
-            canEdit={canEdit}
-            jiraConfigured={!!jiraCfg}
-            size="md"
-          />
           <Link
             className="rounded-lg border bg-surface-2 px-3 py-2 text-sm font-medium hover:bg-surface-1"
             href={`/test-plans/${run.testPlan.id}/runs`}

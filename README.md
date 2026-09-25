@@ -72,4 +72,3 @@ npm run dev
   - `/test-plans` + создание (с выбором test cases) и просмотр
   - `/users` (admin) + создание пользователей
 - Поиск/фильтры (MVP) для test cases: `q` + `status`
-

@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiRequireRole } from "@/lib/api-auth";
 import { canAccessProject } from "@/lib/project-access";
-import { getJiraConfig, jiraBrowseUrl } from "@/lib/jira";
 
 export const runtime = "nodejs";
 
@@ -25,15 +24,6 @@ function parsePathname(pathname: string): { kind: Kind; id: string; runId?: stri
   m = pathname.match(/^\/test-plans\/([^/]+)\/runs\/([^/]+)\/?$/);
   if (m) return { kind: "testPlanRun", id: m[1], runId: m[2] };
   return null;
-}
-
-function jiraInfo(issueKey: string | null) {
-  const cfg = getJiraConfig();
-  return {
-    configured: !!cfg,
-    issueKey,
-    browseUrl: issueKey && cfg ? jiraBrowseUrl(cfg.baseUrl, issueKey) : null
-  };
 }
 
 function countDone(arr: unknown) {
@@ -60,8 +50,6 @@ export async function GET(req: Request) {
   const parsed = parsePathname(path);
   if (!parsed) return NextResponse.json({ ok: true, context: null });
 
-  const canEdit = auth.session.role === "admin" || auth.session.role === "editor";
-
   if (parsed.kind === "testCase") {
     const tc = await prisma.testCase.findUnique({ where: { id: parsed.id } });
     if (!tc) return NextResponse.json({ ok: true, context: null });
@@ -72,8 +60,6 @@ export async function GET(req: Request) {
         kind: parsed.kind,
         id: tc.id,
         title: tc.title,
-        canEdit,
-        jira: jiraInfo(tc.jiraIssueKey ?? null),
         links: {
           entityUrl: `/test-cases/${tc.id}`,
           runsUrl: `/test-cases/${tc.id}/runs`
@@ -92,8 +78,6 @@ export async function GET(req: Request) {
         kind: parsed.kind,
         id: cl.id,
         title: cl.title,
-        canEdit,
-        jira: jiraInfo((cl as any).jiraIssueKey ?? null),
         links: {
           entityUrl: `/checklists/${cl.id}`,
           runsUrl: `/checklists/${cl.id}/runs`
@@ -119,8 +103,6 @@ export async function GET(req: Request) {
         kind: parsed.kind,
         id: plan.id,
         title: plan.title,
-        canEdit,
-        jira: jiraInfo(plan.jiraIssueKey ?? null),
         linked: {
           testCases: (plan.cases ?? []).map((c: any) => ({ id: c.testCaseId, title: c.testCase?.title ?? "" })),
           checklists: (plan.checklists ?? []).map((c: any) => ({ id: c.checklistId, title: c.checklist?.title ?? "" }))
@@ -152,8 +134,6 @@ export async function GET(req: Request) {
         kind: parsed.kind,
         id: run.id,
         title: run.testCase?.title ?? "",
-        canEdit,
-        jira: jiraInfo(run.jiraIssueKey ?? null),
         run: {
           status: run.status,
           progress,
@@ -187,8 +167,6 @@ export async function GET(req: Request) {
         kind: parsed.kind,
         id: run.id,
         title: run.checklist?.title ?? "",
-        canEdit,
-        jira: jiraInfo(run.jiraIssueKey ?? null),
         run: {
           status: run.status,
           progress,
@@ -243,8 +221,6 @@ export async function GET(req: Request) {
       kind: parsed.kind,
       id: run.id,
       title: run.testPlan?.title ?? "",
-      canEdit,
-      jira: jiraInfo(run.jiraIssueKey ?? null),
       run: {
         status: run.status,
         progress,

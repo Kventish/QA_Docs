@@ -32,7 +32,6 @@ type TestPlanApiResponse = {
         status: string;
       };
     }>;
-    jiraIssueKey?: string | null;
   };
 };
 
@@ -52,7 +51,6 @@ export default function EditTestPlanPage({ params }: { params: { id: string } })
   const [tags, setTags] = useState("");
   const [objective, setObjective] = useState("");
   const [scope, setScope] = useState("");
-  const [jiraIssueKey, setJiraIssueKey] = useState("");
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [selectedChecklists, setSelectedChecklists] = useState<Record<string, boolean>>({});
 
@@ -117,7 +115,6 @@ export default function EditTestPlanPage({ params }: { params: { id: string } })
         setTags(plan.tags?.join(", ") ?? "");
         setObjective(plan.objective ?? "");
         setScope(plan.scope ?? "");
-        setJiraIssueKey(plan.jiraIssueKey ?? "");
         setSelected(
           plan.cases.reduce((acc, item) => {
             acc[item.testCaseId] = true;
@@ -179,8 +176,7 @@ export default function EditTestPlanPage({ params }: { params: { id: string } })
           .map((item) => item.trim())
           .filter(Boolean),
         testCaseIds: selectedIds,
-        checklistIds: selectedChecklistIds,
-        jiraIssueKey: jiraIssueKey.trim() === "" ? null : jiraIssueKey.trim()
+        checklistIds: selectedChecklistIds
       })
     }).catch(() => null);
 
@@ -309,16 +305,6 @@ export default function EditTestPlanPage({ params }: { params: { id: string } })
                 onChange={(e) => setScope(e.target.value)}
               />
             </div>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-sm text-text-muted">{t("jira.issueKeyLabel")}</label>
-            <input
-              className="w-full rounded-lg border bg-surface-2 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500"
-              value={jiraIssueKey}
-              onChange={(e) => setJiraIssueKey(e.target.value)}
-              placeholder={t("jira.issueKeyPlaceholder")}
-            />
           </div>
 
           <div className="space-y-2">

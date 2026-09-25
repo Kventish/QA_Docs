@@ -20,7 +20,6 @@ type TestCase = {
   status: "draft" | "active" | "archived";
   tags: string[];
   stepsJson?: unknown;
-  jiraIssueKey?: string | null;
 };
 
 const emptyStep: { type: "step"; step: string; expectedResult: string; actualResult: string } = {
@@ -85,7 +84,6 @@ export default function EditTestCasePage({ params }: { params: { id: string } })
   const [tags, setTags] = useState("");
   const [preconditions, setPreconditions] = useState("");
   const [postconditions, setPostconditions] = useState("");
-  const [jiraIssueKey, setJiraIssueKey] = useState("");
   const [steps, setSteps] = useState<EditRow[]>([{ ...emptyStep }]);
 
   useEffect(() => {
@@ -132,7 +130,6 @@ export default function EditTestCasePage({ params }: { params: { id: string } })
         setTags((tc.tags ?? []).join(", "));
         setPreconditions(tc.preconditions ?? "");
         setPostconditions(tc.postconditions ?? "");
-        setJiraIssueKey(tc.jiraIssueKey ?? "");
         setSteps(parseSteps(tc));
       })
       .catch(async (r) => {
@@ -219,8 +216,7 @@ export default function EditTestCasePage({ params }: { params: { id: string } })
           .filter(Boolean),
         preconditions,
         postconditions,
-        steps: serializeSteps(steps),
-        jiraIssueKey: jiraIssueKey.trim() === "" ? null : jiraIssueKey.trim()
+        steps: serializeSteps(steps)
       })
     }).catch(() => null);
 
@@ -333,16 +329,6 @@ export default function EditTestCasePage({ params }: { params: { id: string } })
               placeholder={t("testCases.form.postconditionsPlaceholder")}
             />
           </div>
-          <div className="space-y-1">
-            <label className="text-sm text-text-muted">{t("jira.issueKeyLabel")}</label>
-            <input
-              className="w-full rounded-lg border bg-surface-2 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500"
-              value={jiraIssueKey}
-              onChange={(e) => setJiraIssueKey(e.target.value)}
-              placeholder={t("jira.issueKeyPlaceholder")}
-            />
-          </div>
-
           <div className="space-y-3">
             <label className="text-sm text-text-muted">
               {t("testCases.form.steps")} <span className="text-red-400">*</span>

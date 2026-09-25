@@ -40,23 +40,6 @@ export const en = {
     filtersNeedProject: "Create a project first…",
     noProjectsTableHint: "No projects yet. Create one under Projects."
   },
-  jira: {
-    sectionTitle: "Jira",
-    linkedIssue: "Linked issue",
-    openInJira: "Open in Jira",
-    noIssueYet: "No Jira issue yet.",
-    createInJira: "Create Jira issue",
-    createFailed: "Failed to create Jira issue",
-    alreadyLinked: "Already linked to a Jira issue",
-    notConfigured: "Jira is not configured (set JIRA_* and JIRA_PROJECT_KEY in .env).",
-    issueKeyLabel: "Jira issue key",
-    issueKeyPlaceholder: "SCRUM-1",
-    epicKeyLabel: "Epic issue key (parent for new issues)",
-    projectKeyLabel: "Jira project key",
-    epicKeyPlaceholder: "SCRUM-1",
-    saveJiraSettings: "Save Jira settings",
-    jiraSettingsSaved: "Jira settings saved"
-  },
   nav: {
     dashboard: "Dashboard",
     projects: "Projects",
@@ -121,7 +104,6 @@ export const en = {
     details: "Details",
     notes: "Notes",
     attachments: "Attachments",
-    jira: "Jira",
     sectionSteps: "Run steps",
     sectionAttachments: "Run attachments",
     sectionChecklistItems: "Checklist items",
@@ -163,9 +145,7 @@ export const en = {
     deleteFailed: "Failed to delete project",
     deleteProject: "Delete project",
     coverage: "Coverage",
-    empty: "No projects.",
-    jiraIntegration: "Jira integration",
-    jiraSaveFailed: "Failed to save Jira settings"
+    empty: "No projects."
   },
   testCases: {
     title: "Test cases",
@@ -412,4 +392,3 @@ export const en = {
     cannotDeleteCurrentUser: "Cannot delete current user"
   }
 } as const;
-

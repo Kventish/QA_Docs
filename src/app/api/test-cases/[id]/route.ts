@@ -4,7 +4,6 @@ import { prisma } from "@/lib/prisma";
 import { apiRequireRole } from "@/lib/api-auth";
 import { canAccessProject } from "@/lib/project-access";
 import { parseStoredSteps, validateStepsForSave } from "@/lib/test-case-includes";
-import { isValidJiraIssueKey, normalizeJiraIssueKey } from "@/lib/jira-keys";
 
 export const runtime = "nodejs";
 
@@ -46,9 +45,7 @@ const PatchSchema = z.object({
   expected: z.string().optional(),
   status: z.enum(["draft", "active", "archived"]).optional(),
   tags: z.array(z.string()).optional(),
-  steps: z.array(StepRowSchema).optional(),
-  /** Ключ задачи Jira (PROJ-1) или пустая строка / null чтобы сбросить */
-  jiraIssueKey: z.union([z.string(), z.null()]).optional()
+  steps: z.array(StepRowSchema).optional()
 });
 
 export async function PATCH(
@@ -62,12 +59,6 @@ export async function PATCH(
   const parsed = PatchSchema.safeParse(json);
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
-  }
-
-  if (parsed.data.jiraIssueKey !== undefined && parsed.data.jiraIssueKey !== null && parsed.data.jiraIssueKey !== "") {
-    if (!isValidJiraIssueKey(parsed.data.jiraIssueKey)) {
-      return NextResponse.json({ error: "Invalid Jira issue key format" }, { status: 400 });
-    }
   }
 
   const existing = await prisma.testCase.findUnique({ where: { id: params.id } });
@@ -94,11 +85,6 @@ export async function PATCH(
   if (parsed.data.expected !== undefined) data.expected = parsed.data.expected;
   if (parsed.data.status !== undefined) data.status = parsed.data.status;
   if (parsed.data.tags !== undefined) data.tags = parsed.data.tags;
-  if (parsed.data.jiraIssueKey !== undefined) {
-    const v = parsed.data.jiraIssueKey;
-    data.jiraIssueKey =
-      v === null || v === "" ? null : normalizeJiraIssueKey(v);
-  }
   if (parsed.data.steps !== undefined) {
     const rows = parseStoredSteps(parsed.data.steps);
     const v = await validateStepsForSave(prisma, effectiveProjectId, params.id, rows);
@@ -126,4 +112,3 @@ export async function DELETE(
   await prisma.testCase.delete({ where: { id: params.id } }).catch(() => null);
   return NextResponse.json({ ok: true });
 }
-

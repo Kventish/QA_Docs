@@ -49,10 +49,6 @@ model Project {
   id        String   @id @default(cuid())
   name      String
   slug      String   @unique
-  /// Jira project key (e.g. SCRUM) for creating issues; falls back to env JIRA_PROJECT_KEY
-  jiraProjectKey String?
-  /// Optional Epic issue key; new issues may be linked as children when Jira allows
-  jiraEpicKey    String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -85,7 +81,6 @@ model TestCase {
   status        ArtifactStatus @default(draft)
   tags          String[]       @default([])
   stepsJson     Json           @default("[]")
-  jiraIssueKey  String?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
@@ -105,7 +100,6 @@ model Checklist {
   itemsJson Json           @default("[]")
   status    ArtifactStatus @default(draft)
   tags      String[]       @default([])
-  jiraIssueKey String?
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
 
@@ -126,7 +120,6 @@ model TestPlan {
   scope     String         @default("")
   status    ArtifactStatus @default(draft)
   tags      String[]       @default([])
-  jiraIssueKey String?
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
 
@@ -170,7 +163,6 @@ model TestCaseRun {
   status       RunStatus  @default(pending)
   actualResult String     @default("")
   notes        String     @default("")
-  jiraIssueKey String?
   stepsJson    Json       @default("[]")
   attachmentsJson Json     @default("[]")
   createdAt    DateTime   @default(now())
@@ -189,7 +181,6 @@ model ChecklistRun {
   status       RunStatus  @default(pending)
   itemResults  Json       @default("[]")
   notes        String     @default("")
-  jiraIssueKey String?
   attachmentsJson Json     @default("[]")
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
@@ -207,7 +198,6 @@ model TestPlanRun {
   status      RunStatus  @default(pending)
   summary     String     @default("")
   detailsJson Json       @default("[]")
-  jiraIssueKey String?
   attachmentsJson Json     @default("[]")
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
