@@ -1,56 +1,86 @@
-import path from "node:path";
-import { existsSync, promises as fsPromises } from "node:fs";
+import { get } from "@vercel/blob";
+import { getSession } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
-function getMimeType(fileName: string) {
-  const ext = path.extname(fileName).toLowerCase();
-  switch (ext) {
-    case ".jpg":
-    case ".jpeg":
-      return "image/jpeg";
-    case ".png":
-      return "image/png";
-    case ".gif":
-      return "image/gif";
-    case ".webp":
-      return "image/webp";
-    case ".svg":
-      return "image/svg+xml";
-    case ".pdf":
-      return "application/pdf";
-    case ".csv":
-      return "text/csv";
-    case ".txt":
-      return "text/plain";
-    default:
-      return "application/octet-stream";
-  }
-}
+export async function GET(
+  req: Request,
+  { params }: { params: { path?: string[] } }
+) {
+  const session = getSession();
 
-export async function GET(_req: Request, { params }: { params: { path?: string[] } }) {
+  if (!session) {
+    return new Response(
+      JSON.stringify({ error: "Unauthorized" }),
+      {
+        status: 401,
+        headers: { "Content-Type": "application/json" }
+      }
+    );
+  }
+
   const segments = params.path ?? [];
-  const baseDir = path.join(process.cwd(), "public", "uploads");
-  const filePath = path.join(baseDir, ...segments);
-  const normalized = path.normalize(filePath);
 
-  if (!normalized.startsWith(baseDir)) {
-    return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: { "Content-Type": "application/json" } });
+  if (segments.length === 0) {
+    return new Response(
+      JSON.stringify({ error: "Missing path" }),
+      {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
+      }
+    );
   }
 
-  if (!existsSync(normalized)) {
-    return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers: { "Content-Type": "application/json" } });
+  const pathname = segments.join("/");
+
+  // Разрешаем читать только вложения прогонов.
+  if (
+    !pathname.startsWith("runs/") ||
+    pathname.includes("..")
+  ) {
+    return new Response(
+      JSON.stringify({ error: "Forbidden" }),
+      {
+        status: 403,
+        headers: { "Content-Type": "application/json" }
+      }
+    );
   }
 
-  const fileName = path.basename(normalized);
-  const mimeType = getMimeType(fileName);
-  const fileBuffer = await fsPromises.readFile(normalized);
+  const result = await get(pathname, {
+    access: "private",
+    ifNoneMatch: req.headers.get("if-none-match") ?? undefined
+  });
 
-  return new Response(fileBuffer, {
+  if (!result) {
+    return new Response(
+      JSON.stringify({ error: "Not found" }),
+      {
+        status: 404,
+        headers: { "Content-Type": "application/json" }
+      }
+    );
+  }
+
+  if (result.statusCode === 304) {
+    return new Response(null, {
+      status: 304,
+      headers: {
+        ETag: result.blob.etag,
+        "Cache-Control": "private, no-cache"
+      }
+    });
+  }
+
+  return new Response(result.stream, {
     status: 200,
     headers: {
-      "Content-Type": mimeType,
-      "Content-Disposition": `inline; filename="${fileName}"`
+      "Content-Type":
+        result.blob.contentType ?? "application/octet-stream",
+      "Content-Disposition": "inline",
+      "X-Content-Type-Options": "nosniff",
+      ETag: result.blob.etag,
+      "Cache-Control": "private, no-cache"
     }
   });
 }

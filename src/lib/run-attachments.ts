@@ -1,5 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import path from "node:path";
+import { put } from "@vercel/blob";
 
 type RunAttachment = {
   name: string;
@@ -8,40 +7,51 @@ type RunAttachment = {
   url: string;
 };
 
-function getUniqueFileName(uploadDir: string, fileName: string) {
-  const ext = path.extname(fileName);
-  const base = path.basename(fileName, ext);
-  let uniqueName = fileName;
-  let counter = 1;
-
-  while (existsSync(path.join(uploadDir, uniqueName))) {
-    uniqueName = `${base}-${counter}${ext}`;
-    counter += 1;
-  }
-
-  return uniqueName;
+function sanitizeFileName(fileName: string) {
+  return (
+    fileName
+      .replace(/\.{2,}/g, "_")
+      .replace(/[^a-zA-Z0-9._-]/g, "_") || "attachment"
+  );
 }
 
-export async function saveRunAttachments(runId: string, attachments: FormDataEntryValue[]): Promise<RunAttachment[]> {
-  const uploadDir = path.join(process.cwd(), "public", "uploads", runId);
-  mkdirSync(uploadDir, { recursive: true });
+function encodePathname(pathname: string) {
+  return pathname
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+}
 
+export async function saveRunAttachments(
+  runId: string,
+  attachments: FormDataEntryValue[]
+): Promise<RunAttachment[]> {
   const stored: RunAttachment[] = [];
+
   for (const attachment of attachments) {
     if (!(attachment instanceof File)) continue;
     if (!attachment.name || attachment.size === 0) continue;
 
-    const safeName = attachment.name.replace(/\.{2,}/g, "_").replace(/[^a-zA-Z0-9._-]/g, "_") || "attachment";
-    const uniqueName = getUniqueFileName(uploadDir, safeName);
-    const filePath = path.join(uploadDir, uniqueName);
-    const buffer = Buffer.from(await attachment.arrayBuffer());
-    writeFileSync(filePath, buffer);
+    const safeName = sanitizeFileName(attachment.name);
+
+    const blob = await put(
+      `runs/${runId}/${safeName}`,
+      attachment,
+      {
+        access: "private",
+        addRandomSuffix: true,
+        contentType: attachment.type || undefined
+      }
+    );
 
     stored.push({
-      name: uniqueName,
-      size: buffer.length,
-      type: attachment.type,
-      url: `/api/uploads/${runId}/${encodeURIComponent(uniqueName)}`
+      name: safeName,
+      size: attachment.size,
+      type:
+        attachment.type ||
+        blob.contentType ||
+        "application/octet-stream",
+      url: `/api/uploads/${encodePathname(blob.pathname)}`
     });
   }
 
