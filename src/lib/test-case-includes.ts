@@ -288,18 +288,6 @@ export async function validateStepsForCreate(
   return { ok: true };
 }
 
-/** True if structure has at least one plain step or a valid include reference (non-empty id). */
-export function storedStepsAreNonEmpty(rows: StoredStepRow[]): boolean {
-  for (const row of rows) {
-    if ("kind" in row && row.kind === "include" && row.testCaseId?.trim()) return true;
-    if (!("kind" in row) || row.kind !== "include") {
-      const s = row as { step?: string };
-      if ((s.step ?? "").trim()) return true;
-    }
-  }
-  return false;
-}
-
 export function parseStoredSteps(raw: unknown): StoredStepRow[] {
   return normalizeRows(raw);
 }

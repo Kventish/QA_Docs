@@ -1,4 +1,4 @@
-import { Prisma, Run, RunKind } from "@prisma/client";
+import { Prisma, Run } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { SessionUser } from "@/lib/auth";
 import { calculateStatus, DefinitionSnapshot, executionSeverity, Kind, leafSteps, planItemState, Result, RunError, ExecutionSeverity, StepResult } from "./domain";

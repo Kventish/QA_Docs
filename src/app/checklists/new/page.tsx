@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useLocale, useT } from "@/lib/i18n/useT";
+import { useT } from "@/lib/i18n/useT";
 import { ProjectFormSelect } from "@/components/ProjectSelect";
 
 type Item = { text: string; checked: boolean; expectedResult: string };
 type Project = { id: string; name: string; slug: string };
 
 export default function NewChecklistPage() {
-  const locale = useLocale();
   const t = useT();
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState("");

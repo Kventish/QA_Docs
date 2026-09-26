@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useT, useLocale } from "@/lib/i18n/useT";
+import { useT } from "@/lib/i18n/useT";
 import { ProjectFormSelect } from "@/components/ProjectSelect";
 
 type TestCaseLite = { id: string; title: string; status: string; tags: string[] };
@@ -9,7 +9,6 @@ type ChecklistLite = { id: string; title: string; status: string };
 type Project = { id: string; name: string; slug: string };
 
 export default function NewTestPlanPage() {
-  const locale = useLocale();
   const t = useT();
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState("");

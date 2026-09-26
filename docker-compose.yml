@@ -8,6 +8,7 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/qadocs?schema=public
+      DIRECT_URL: postgresql://postgres:postgres@db:5432/qadocs?schema=public
       AUTH_SECRET: ${AUTH_SECRET}
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
