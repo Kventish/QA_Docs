@@ -1,7 +1,7 @@
 import { Prisma, Run, RunKind } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { SessionUser } from "@/lib/auth";
-import { calculateStatus, DefinitionSnapshot, executionSeverity, Kind, leafSteps, planItemState, Result, RunError, ExecutionSeverity } from "./domain";
+import { calculateStatus, DefinitionSnapshot, executionSeverity, Kind, leafSteps, planItemState, Result, RunError, ExecutionSeverity, StepResult } from "./domain";
 import { captureDefinition, storeSnapshot } from "./snapshot";
 
 type DbClient = Pick<Prisma.TransactionClient,
@@ -149,7 +149,7 @@ async function lockOpenStepMutation(tx: Tx, id: string, session: SessionUser) {
 }
 
 export async function updateStep(id: string, stepId: string, session: SessionUser,
-  patch: { stepRevision: number; result: Result | null; severity: ExecutionSeverity | null; actualResult: string }) {
+  patch: { stepRevision: number; result: StepResult | null; severity: ExecutionSeverity | null; actualResult: string }) {
   return prisma.$transaction(async tx => {
     const { run, actor, parentItem } = await lockOpenStepMutation(tx, id, session);
     const severity = executionSeverity(patch.result, patch.severity);
@@ -167,6 +167,32 @@ export async function updateStep(id: string, stepId: string, session: SessionUse
     const step = await tx.stepRunResult.findUniqueOrThrow({ where: { id: stepId } });
     return { step, autoStatus };
   }, transactionOptions);
+}
+
+export async function blockRemainingSteps(id: string, stepId: string, revision: number, session: SessionUser) {
+  return mutateRun(id, revision, session, async (tx, run, actor) => {
+    if (run.kind === "test_plan") throw new RunError("notFound", 404);
+    const source = await tx.stepRunResult.findFirst({ where: { id: stepId, runId: id } });
+    if (!source) throw new RunError("notFound", 404);
+    if (source.result !== "failed") throw new RunError("sourceStepNotFailed", 409);
+
+    const snapshot = await tx.runDefinitionSnapshot.findUniqueOrThrow({ where: { id: run.snapshotId } });
+    const definition = snapshot.definition as unknown as DefinitionSnapshot;
+    const orderedKeys = leafSteps(definition.steps).map(step => step.key);
+    const sourceIndex = orderedKeys.indexOf(source.occurrenceKey);
+    if (sourceIndex < 0) throw new RunError("invalidDefinition", 409);
+    const remainingKeys = orderedKeys.slice(sourceIndex + 1);
+
+    const changed = remainingKeys.length ? await tx.stepRunResult.updateMany({
+      where: { runId: id, occurrenceKey: { in: remainingKeys }, result: null },
+      data: {
+        result: "blocked", severity: null, updatedById: actor.id,
+        updatedByEmailSnapshot: actor.email, revision: { increment: 1 }
+      }
+    }) : { count: 0 };
+    const autoStatus = await recalculate(tx, run);
+    return { count: changed.count, autoStatus };
+  });
 }
 
 export async function addComment(id: string, stepId: string, body: string, session: SessionUser) {

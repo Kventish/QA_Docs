@@ -444,9 +444,10 @@ export default function EditTestPlanPage({ params }: { params: { id: string } })
           <button
             type="submit"
             disabled={saving}
+            aria-busy={saving}
             className="inline-flex items-center justify-center rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {saving ? t("common.loading") : t("common.save")}
+            {saving ? t("common.saving") : t("common.save")}
           </button>
         </form>
       </div>

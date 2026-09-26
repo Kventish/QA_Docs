@@ -6,6 +6,7 @@ import { RunError, Kind } from "./domain";
 
 export const revisionSchema = z.number().int().nonnegative();
 export const resultSchema = z.enum(["passed", "failed", "questionable"]);
+export const stepResultSchema = z.enum(["passed", "failed", "questionable", "blocked"]);
 export const severitySchema = z.enum(["low", "medium", "high", "critical"]);
 export const reasonSchema = z.string().trim().min(1).max(5000);
 export const keySchema = z.string().min(8).max(100).regex(/^[A-Za-z0-9:_-]+$/);

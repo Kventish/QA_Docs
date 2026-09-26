@@ -24,6 +24,9 @@ const en = {
   fileHint: "One PNG, JPEG, WebP, PDF, UTF-8 TXT/LOG file, up to 3 MiB.", download: "Download",
   complete: "Complete", cancel: "Cancel run", reason: "Reason", override: "Override final result",
   applyOverride: "Apply audited correction", audit: "Result corrections", previous: "Previous result",
+  starting: "Starting…", completing: "Completing…", cancelling: "Cancelling…", overriding: "Applying…", openingNext: "Opening next…",
+  blockRemaining: "Block remaining steps", blockingRemaining: "Processing…",
+  blockRemainingConfirm: "Mark all subsequent unfinished steps as blocked?",
   saving: "Saving…", saved: "Saved", saveFailed: "Save failed", uploading: "Uploading…", unsaved: "Unsaved changes", retry: "Retry save", reload: "Reload saved state",
   reloadWarning: "Reload and discard unsaved edits?", cancelDiscardWarning: "There are unsaved changes. Cancelling the run will discard them.", loading: "Loading…", empty: "No runs yet",
   timerHint: "Elapsed time includes time while the page is closed.", incomplete: "Evaluate every executable step before completing.",
@@ -36,7 +39,7 @@ const en = {
   navigateDiscardWarning: "There are unsaved changes. Leave this run and discard them?",
   cancelledReason: "Cancellation reason", next: "Next", previousPage: "Previous", legacyHistory: "Legacy history",
   startHint: "Start saves an immutable definition and starts the timer. To continue an existing run, use Resume in history.",
-  states: { passed: "Passed", failed: "Failed", questionable: "Questionable", in_progress: "In progress", completed: "Completed", cancelled: "Cancelled", not_started: "Not started" },
+  states: { passed: "Passed", failed: "Failed", questionable: "Questionable", blocked: "Blocked", in_progress: "In progress", completed: "Completed", cancelled: "Cancelled", not_started: "Not started" },
   severities: { low: "Low", medium: "Medium", high: "High", critical: "Critical" },
   errors: {
     unauthorized: "Sign in again.", forbidden: "You do not have permission for this action.", notFound: "Run or document not found.",
@@ -48,7 +51,7 @@ const en = {
     emptyDefinition: "An empty document cannot be started.", definitionTooLarge: "The definition exceeds the run size limit.",
     archived: "An archived document cannot be started.", fileSize: "Maximum file size is 3 MiB; one file per request.",
     fileType: "File extension, MIME or contents are not an allowed format.", network: "Network error. Your edits have not been confirmed as saved.",
-    autosaveFailed: "Some step changes were not saved. Resolve the highlighted save errors before continuing.",
+    autosaveFailed: "Some step changes were not saved. Resolve the highlighted save errors before continuing.", sourceStepNotFailed: "The source step is no longer Failed. Reload the saved state.",
     saving: "Another run operation is still in progress."
   }
 };
@@ -78,6 +81,9 @@ const ru: typeof en = {
   fileHint: "Один файл PNG, JPEG, WebP, PDF, TXT/LOG в UTF-8, до 3 MiB.", download: "Скачать",
   complete: "Завершить", cancel: "Отменить прогон", reason: "Причина", override: "Изменить итог вручную",
   applyOverride: "Сохранить корректировку с аудитом", audit: "Корректировки результата", previous: "Предыдущий итог",
+  starting: "Запуск…", completing: "Завершение…", cancelling: "Отмена…", overriding: "Применение…", openingNext: "Открытие следующего…",
+  blockRemaining: "Заблокировать оставшиеся шаги", blockingRemaining: "Обработка…",
+  blockRemainingConfirm: "Отметить все последующие невыполненные шаги как заблокированные?",
   saving: "Сохраняется…", saved: "Сохранено", saveFailed: "Ошибка сохранения", uploading: "Загрузка…", unsaved: "Есть несохранённые изменения", retry: "Повторить сохранение", reload: "Загрузить сохранённое состояние",
   reloadWarning: "Загрузить сохранённое состояние и отменить несохранённые правки?", cancelDiscardWarning: "Есть несохранённые изменения. При отмене прогона они будут отброшены.", loading: "Загрузка…", empty: "Прогонов пока нет",
   timerHint: "Время продолжает учитываться при закрытой странице.", incomplete: "Оцените все исполняемые шаги перед завершением.",
@@ -90,7 +96,7 @@ const ru: typeof en = {
   navigateDiscardWarning: "Есть несохранённые изменения. Покинуть прогон и отбросить их?",
   cancelledReason: "Причина отмены", next: "Далее", previousPage: "Назад", legacyHistory: "История Legacy",
   startHint: "Начало прогона сохраняет неизменяемое определение и запускает таймер. Для продолжения существующего прогона используйте историю.",
-  states: { passed: "Пройден", failed: "Провален", questionable: "Под вопросом", in_progress: "Выполняется", completed: "Завершён", cancelled: "Отменён", not_started: "Не начат" },
+  states: { passed: "Пройден", failed: "Провален", questionable: "Под вопросом", blocked: "Заблокирован", in_progress: "Выполняется", completed: "Завершён", cancelled: "Отменён", not_started: "Не начат" },
   severities: { low: "Низкая", medium: "Средняя", high: "Высокая", critical: "Критическая" },
   errors: {
     unauthorized: "Войдите снова.", forbidden: "Недостаточно прав для этого действия.", notFound: "Прогон или документ не найден.",
@@ -102,7 +108,7 @@ const ru: typeof en = {
     emptyDefinition: "Нельзя запустить пустой документ.", definitionTooLarge: "Определение превышает допустимый размер прогона.",
     archived: "Нельзя запустить архивный документ.", fileSize: "Максимум 3 MiB, один файл на запрос.",
     fileType: "Расширение, MIME или содержимое файла не соответствуют разрешённому формату.", network: "Ошибка сети. Сохранение ваших изменений не подтверждено.",
-    autosaveFailed: "Часть изменений шагов не сохранена. Исправьте отмеченные ошибки сохранения перед продолжением.",
+    autosaveFailed: "Часть изменений шагов не сохранена. Исправьте отмеченные ошибки сохранения перед продолжением.", sourceStepNotFailed: "Исходный шаг больше не имеет статус Failed. Загрузите сохранённое состояние.",
     saving: "Другая операция с прогоном ещё выполняется."
   }
 };

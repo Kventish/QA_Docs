@@ -184,8 +184,9 @@ export default function EditUserPage({ params }: { params: { id: string } }) {
             <button
               className="flex-1 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium hover:bg-brand-500 disabled:opacity-60"
               disabled={saving}
+              aria-busy={saving}
             >
-              {saving ? t("common.loading") : t("common.save")}
+              {saving ? t("common.saving") : t("common.save")}
             </button>
             <a
               className="rounded-lg border bg-surface-2 px-3 py-2 text-sm font-medium hover:bg-surface-1"
@@ -199,4 +200,3 @@ export default function EditUserPage({ params }: { params: { id: string } }) {
     </div>
   );
 }
-

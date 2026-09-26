@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, notifyLocaleChanged, useT } from "@/lib/i18n/useT";
 import ToastCenter from "@/components/toast/ToastCenter";
+import NavigationProgress from "@/components/navigation/NavigationProgress";
 
 type SearchResult = {
   testCases: { id: string; title: string }[];
@@ -141,6 +142,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen">
+      <NavigationProgress />
       <ToastCenter />
       <div className="flex min-h-screen">
         <aside className="fixed left-0 top-0 hidden h-screen w-64 shrink-0 border-r bg-surface-1 md:block">

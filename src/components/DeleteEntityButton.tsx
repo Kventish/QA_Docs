@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useT } from "@/lib/i18n/useT";
 
 type DeleteEntityButtonProps = {
   href: string;
@@ -10,10 +11,14 @@ type DeleteEntityButtonProps = {
 };
 
 export default function DeleteEntityButton({ href, redirectTo, confirmText, label }: DeleteEntityButtonProps) {
+  const t = useT();
   const [deleting, setDeleting] = useState(false);
+  const deletingRef = useRef(false);
 
   async function handleDelete() {
+    if (deletingRef.current) return;
     if (!confirm(confirmText)) return;
+    deletingRef.current = true;
     setDeleting(true);
 
     const res = await fetch(href, {
@@ -22,6 +27,7 @@ export default function DeleteEntityButton({ href, redirectTo, confirmText, labe
     }).catch(() => null);
 
     if (!res || !res.ok) {
+      deletingRef.current = false;
       setDeleting(false);
       alert("Delete failed");
       return;
@@ -36,8 +42,9 @@ export default function DeleteEntityButton({ href, redirectTo, confirmText, labe
       className="rounded-lg border border-red-500 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-70"
       onClick={handleDelete}
       disabled={deleting}
+      aria-busy={deleting}
     >
-      {deleting ? "Deleting…" : label}
+      {deleting ? t("common.deleting") : label}
     </button>
   );
 }

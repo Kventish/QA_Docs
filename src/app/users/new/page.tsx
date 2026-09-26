@@ -122,12 +122,12 @@ export default function NewUserPage() {
           <button
             className="w-full rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium hover:bg-brand-500 disabled:opacity-60"
             disabled={saving}
+            aria-busy={saving}
           >
-            {saving ? t("common.loading") : t("common.create")}
+            {saving ? t("common.creating") : t("common.create")}
           </button>
         </form>
       </div>
     </div>
   );
 }
-

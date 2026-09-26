@@ -4,9 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import type { RunViewJson } from "@/lib/run-engine/service";
-import { calculateStatus, documentPaths, durationText, ExecutionSeverity, Result, SnapshotStep } from "@/lib/run-engine/domain";
+import { calculateStatus, documentPaths, durationText, ExecutionSeverity, Result, SnapshotStep, StepResult } from "@/lib/run-engine/domain";
 import { useLocale } from "@/lib/i18n/useT";
 import { runLabels, runErrorLabel, RunLabels } from "@/lib/i18n/dictionaries/run-engine";
+import { startNavigation } from "@/components/navigation/NavigationProgress";
 
 const inputClass = "mt-1 w-full rounded-lg border bg-surface-2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
 const buttonClass = "inline-flex items-center justify-center rounded-lg border bg-surface-2 px-3 py-2 text-sm font-medium hover:bg-surface-1 disabled:cursor-not-allowed disabled:opacity-50";
@@ -16,16 +17,17 @@ function statusClass(status: string | null) {
   if (status === "passed" || status === "completed") return "border-emerald-500/40 bg-emerald-500/10 text-emerald-400";
   if (status === "failed" || status === "cancelled") return "border-red-500/40 bg-red-500/10 text-red-400";
   if (status === "questionable") return "border-amber-500/40 bg-amber-500/10 text-amber-400";
+  if (status === "blocked") return "border-violet-500/40 bg-violet-500/10 text-violet-300";
   if (status === "in_progress") return "border-brand-500/40 bg-brand-500/10 text-brand-500";
   return "border-border bg-surface-2 text-text-muted";
 }
 
 type Step = RunViewJson["steps"][number];
-type StepDraft = { result: Result | null; severity: ExecutionSeverity | null; actualResult: string };
+type StepDraft = { result: StepResult | null; severity: ExecutionSeverity | null; actualResult: string };
 type SaveStatus = "idle" | "saving" | "saved" | "error" | "conflict";
 type CancelPreparation = "saved" | "discard" | "error";
 type StepSaveHandle = { flush: () => Promise<boolean>; prepareCancel: () => Promise<CancelPreparation> };
-type StepState = { result: Result | null; valid: boolean; dirty: boolean; status: SaveStatus };
+type StepState = { result: StepResult | null; valid: boolean; dirty: boolean; status: SaveStatus };
 type MutationResult = { ok: boolean; error?: string; runId?: string };
 type AggregateMutation = (path: string, data: Record<string, unknown> | FormData, method?: string, key?: string) => Promise<MutationResult>;
 
@@ -33,7 +35,11 @@ function sameDraft(left: StepDraft, right: StepDraft) {
   return left.result === right.result && left.severity === right.severity && left.actualResult === right.actualResult;
 }
 
-function StepEditor({ definition, step, runId, canEdit, aggregateMutation, registerSave, onState, onAutoStatus, r, locale }: {
+function BusyLabel({ label }: { label: string }) {
+  return <span className="inline-flex items-center gap-2"><span aria-hidden="true" className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-r-transparent" />{label}</span>;
+}
+
+function StepEditor({ definition, step, runId, canEdit, aggregateMutation, registerSave, onState, onAutoStatus, onBlockRemaining, r, locale }: {
   definition: SnapshotStep;
   step: Step;
   runId: string;
@@ -42,11 +48,12 @@ function StepEditor({ definition, step, runId, canEdit, aggregateMutation, regis
   registerSave: (id: string, handle: StepSaveHandle | null) => void;
   onState: (id: string, state: StepState) => void;
   onAutoStatus: (status: Result | null) => void;
+  onBlockRemaining: (stepId: string) => Promise<MutationResult>;
   r: RunLabels;
   locale: string;
 }) {
   const initial: StepDraft = { result: step.result, severity: step.severity, actualResult: step.actualResult };
-  const [result, setResult] = useState<Result | null>(initial.result);
+  const [result, setResult] = useState<StepResult | null>(initial.result);
   const [severity, setSeverity] = useState<ExecutionSeverity | null>(initial.severity);
   const [actualResult, setActualResult] = useState(initial.actualResult);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
@@ -55,10 +62,14 @@ function StepEditor({ definition, step, runId, canEdit, aggregateMutation, regis
   const [comment, setComment] = useState("");
   const commentRef = useRef("");
   const [commentBusy, setCommentBusy] = useState(false);
+  const commentBusyRef = useRef(false);
   const [commentError, setCommentError] = useState("");
   const [attachments, setAttachments] = useState(step.attachments);
   const [uploading, setUploading] = useState(false);
+  const uploadingRef = useRef(false);
   const [uploadError, setUploadError] = useState("");
+  const [blockingRemaining, setBlockingRemaining] = useState(false);
+  const blockingRemainingRef = useRef(false);
   const desiredRef = useRef<StepDraft>(initial);
   const savedRef = useRef<StepDraft & { revision: number }>({ ...initial, revision: step.revision });
   const queueRef = useRef<Promise<boolean> | null>(null);
@@ -189,7 +200,8 @@ function StepEditor({ definition, step, runId, canEdit, aggregateMutation, regis
   async function addComment(event: FormEvent) {
     event.preventDefault();
     const body = comment.trim();
-    if (!body || commentBusy) return;
+    if (!body || commentBusyRef.current) return;
+    commentBusyRef.current = true;
     setCommentBusy(true); setCommentError(""); publishState("saving");
     try {
       const response = await fetch(`/api/v2/runs/${runId}/steps/${step.id}/comments`, {
@@ -200,15 +212,25 @@ function StepEditor({ definition, step, runId, canEdit, aggregateMutation, regis
       setComments(previous => [...previous, json.comment]);
       commentRef.current = ""; setComment("");
     } catch { setCommentError("network"); }
-    finally { setCommentBusy(false); publishState(); }
+    finally { commentBusyRef.current = false; setCommentBusy(false); publishState(); }
   }
 
   async function upload(file: File) {
+    if (uploadingRef.current) return;
+    uploadingRef.current = true;
     setUploading(true); setUploadError("");
     const form = new FormData(); form.append("file", file); form.append("stepRunResultId", step.id);
     const result = await aggregateMutation("/attachments", form);
     if (!result.ok) setUploadError(result.error ?? "serverError");
-    setUploading(false);
+    uploadingRef.current = false; setUploading(false);
+  }
+
+  async function blockRemaining() {
+    if (blockingRemainingRef.current || !confirm(r.blockRemainingConfirm)) return;
+    blockingRemainingRef.current = true;
+    setBlockingRemaining(true);
+    try { await onBlockRemaining(step.id); }
+    finally { blockingRemainingRef.current = false; setBlockingRemaining(false); }
   }
 
   return <section className={`space-y-5 rounded-xl border bg-surface-1 p-5 shadow-soft ${result === "failed" ? "border-red-500/40" : result === "questionable" ? "border-amber-500/40" : result === "passed" ? "border-emerald-500/30" : ""}`}>
@@ -217,16 +239,17 @@ function StepEditor({ definition, step, runId, canEdit, aggregateMutation, regis
     <div className="rounded-lg bg-surface-2 p-4"><div className="text-xs font-semibold uppercase tracking-wide text-text-muted">{r.expected}</div><div className="mt-2 whitespace-pre-wrap text-sm">{definition.expected || "—"}</div></div>
     <fieldset disabled={!canEdit} className="grid gap-3 sm:grid-cols-2">
       <label className="text-sm font-medium">{r.result}<select aria-label={`${r.result}: ${definition.action}`} className={inputClass} value={result ?? ""} onChange={event => {
-        const nextResult = (event.target.value || null) as Result | null;
-        const nextSeverity = nextResult === "passed" || nextResult === null ? null : severity;
+        const nextResult = (event.target.value || null) as StepResult | null;
+        const nextSeverity = nextResult === "passed" || nextResult === "blocked" || nextResult === null ? null : severity;
         setResult(nextResult); setSeverity(nextSeverity);
         schedule({ result: nextResult, severity: nextSeverity, actualResult }, 0);
-      }}><option value="">{r.states.not_started}</option>{(["passed", "failed", "questionable"] as const).map(value => <option key={value} value={value}>{r.states[value]}</option>)}</select></label>
+      }}><option value="">{r.states.not_started}</option>{(["passed", "failed", "questionable", "blocked"] as const).map(value => <option key={value} value={value}>{r.states[value]}</option>)}</select></label>
       {(result === "failed" || result === "questionable") && <label className="text-sm font-medium">{r.severity}{result === "failed" ? " *" : ""}<select aria-label={r.severity} className={inputClass} value={severity ?? ""} onChange={event => {
         const nextSeverity = (event.target.value || null) as ExecutionSeverity | null;
         setSeverity(nextSeverity); schedule({ result, severity: nextSeverity, actualResult }, 0);
       }}><option value="">{r.none}</option>{(["low", "medium", "high", "critical"] as const).map(value => <option key={value} value={value}>{r.severities[value]}</option>)}</select></label>}
       {result === "failed" && severity === null && <p className="text-sm text-amber-500 sm:col-span-2">{r.severityRequired}</p>}
+      {result === "failed" && <div className="sm:col-span-2"><button type="button" className={buttonClass} disabled={!canEdit || severity === null || blockingRemaining} aria-busy={blockingRemaining} onClick={() => void blockRemaining()}>{blockingRemaining ? <BusyLabel label={r.blockingRemaining} /> : r.blockRemaining}</button></div>}
       <label className="text-sm font-medium sm:col-span-2">{r.actual}<textarea className={`${inputClass} min-h-24`} maxLength={20000} value={actualResult} onChange={event => {
         const nextActual = event.target.value;
         setActualResult(nextActual); schedule({ result, severity, actualResult: nextActual }, 500);
@@ -255,12 +278,14 @@ function StepEditor({ definition, step, runId, canEdit, aggregateMutation, regis
 
 export default function RunWorkspace({ runId }: { runId: string }) {
   const router = useRouter();
+  const push = useCallback((path: string) => { startNavigation(); router.push(path); }, [router]);
   const locale = useLocale();
   const r = runLabels[locale];
   const [run, setRun] = useState<RunViewJson | null>(null);
   const runRef = useRef<RunViewJson | null>(null);
   const [error, setError] = useState("");
   const [aggregateBusy, setAggregateBusy] = useState(false);
+  const [aggregatePath, setAggregatePath] = useState("");
   const aggregateBusyRef = useRef(false);
   const [stepStates, setStepStates] = useState<Record<string, StepState>>({});
   const saveHandles = useRef(new Map<string, StepSaveHandle>());
@@ -272,8 +297,10 @@ export default function RunWorkspace({ runId }: { runId: string }) {
   const [reason, setReason] = useState("");
   const [cancelReason, setCancelReason] = useState("");
   const [runUploading, setRunUploading] = useState(false);
+  const runUploadingRef = useRef(false);
   const [runUploadError, setRunUploadError] = useState("");
   const [nextBusy, setNextBusy] = useState(false);
+  const nextBusyRef = useRef(false);
   const [nextError, setNextError] = useState("");
 
   const accept = useCallback((next: RunViewJson, resetSteps = false) => {
@@ -311,7 +338,7 @@ export default function RunWorkspace({ runId }: { runId: string }) {
 
   const aggregateMutation: AggregateMutation = useCallback(async (path, data, method = "POST", key) => {
     if (aggregateBusyRef.current || !runRef.current) return { ok: false, error: "saving" };
-    aggregateBusyRef.current = true; setAggregateBusy(true); setError("");
+    aggregateBusyRef.current = true; setAggregateBusy(true); setAggregatePath(path); setError("");
     try {
       const headers: Record<string, string> = {};
       if (key) headers["Idempotency-Key"] = key;
@@ -327,7 +354,7 @@ export default function RunWorkspace({ runId }: { runId: string }) {
       if (json.run) accept(json.run);
       return { ok: true, runId: typeof json.runId === "string" ? json.runId : undefined };
     } catch { setError("network"); return { ok: false, error: "network" }; }
-    finally { aggregateBusyRef.current = false; setAggregateBusy(false); }
+    finally { aggregateBusyRef.current = false; setAggregateBusy(false); setAggregatePath(""); }
   }, [accept, runId]);
 
   const flushSteps = useCallback(async () => {
@@ -340,6 +367,16 @@ export default function RunWorkspace({ runId }: { runId: string }) {
     if (!await flushSteps()) return false;
     return (await aggregateMutation("/complete", data)).ok;
   }, [aggregateMutation, flushSteps]);
+  const blockRemainingMutation = useCallback(async (stepId: string) => {
+    setError("");
+    if (!await flushSteps()) return { ok: false, error: "autosaveFailed" };
+    const result = await aggregateMutation(`/steps/${stepId}/block-remaining`, {});
+    if (result.ok && runRef.current) {
+      accept(runRef.current, true);
+      setEpoch(value => value + 1);
+    }
+    return result;
+  }, [accept, aggregateMutation, flushSteps]);
   const cancelMutation = useCallback(async () => {
     setError("");
     const preparations = await Promise.all([...saveHandles.current.values()].map(handle => handle.prepareCancel()));
@@ -356,17 +393,18 @@ export default function RunWorkspace({ runId }: { runId: string }) {
       if (preparations.includes("error")) { setError("autosaveFailed"); return; }
       if (preparations.includes("discard") && !confirm(r.navigateDiscardWarning)) return;
     }
-    router.push(path);
-  }, [r.navigateDiscardWarning, router]);
+    push(path);
+  }, [push, r.navigateDiscardWarning]);
 
   const openNextPlanItem = useCallback(async () => {
     const context = runRef.current?.planContext;
     const next = context?.nextActionable;
-    if (!context || !next || nextBusy) return;
+    if (!context || !next || nextBusyRef.current) return;
+    nextBusyRef.current = true;
     setNextBusy(true); setNextError("");
     try {
       if (next.childRunId) {
-        router.push(`/runs/${next.childRunId}`);
+        push(`/runs/${next.childRunId}`);
         return;
       }
       const storageKey = `run-item-start:${next.id}`;
@@ -380,17 +418,17 @@ export default function RunWorkspace({ runId }: { runId: string }) {
       const json = await response.json().catch(() => null);
       if (!response.ok) { setNextError(json?.error ?? "serverError"); return; }
       sessionStorage.removeItem(storageKey);
-      router.push(`/runs/${json.runId}`);
+      push(`/runs/${json.runId}`);
     } catch { setNextError("network"); }
-    finally { setNextBusy(false); }
-  }, [nextBusy, router]);
+    finally { nextBusyRef.current = false; setNextBusy(false); }
+  }, [push]);
 
   const conflict = ["conflict", "closed", "unauthorized", "forbidden"].includes(error);
-  function resultFor(stepId: string, fallback: Result | null) { return stepStates[stepId]?.result ?? fallback; }
+  function resultFor(stepId: string, fallback: StepResult | null) { return stepStates[stepId]?.result ?? fallback; }
   function renderSteps(definitions: SnapshotStep[]): React.ReactNode {
     return definitions.map(definition => {
       if (definition.children.length) {
-        const values: (Result | null)[] = [];
+        const values: (StepResult | null)[] = [];
         const gather = (nodes: SnapshotStep[]): void => { nodes.forEach(node => node.children.length ? gather(node.children) : (() => {
           const step = run!.steps.find(value => value.occurrenceKey === node.key); values.push(step ? resultFor(step.id, step.result) : null);
         })()); };
@@ -402,7 +440,7 @@ export default function RunWorkspace({ runId }: { runId: string }) {
       if (!step) return <p key={definition.key} role="alert">{r.errors.invalidDefinition}</p>;
       return <StepEditor key={`${step.id}:${epoch}`} definition={definition} step={step} runId={runId}
         canEdit={run!.canEdit && !conflict} aggregateMutation={aggregateMutation} registerSave={registerSave}
-        onState={onStepState} onAutoStatus={onAutoStatus} r={r} locale={locale} />;
+        onState={onStepState} onAutoStatus={onAutoStatus} onBlockRemaining={blockRemainingMutation} r={r} locale={locale} />;
     });
   }
   const date = (value: string) => new Date(value).toLocaleString(locale);
@@ -418,11 +456,13 @@ export default function RunWorkspace({ runId }: { runId: string }) {
   const planPercent = run?.kind === "test_plan" && run.planItems.length ? Math.round(planCompleted / run.planItems.length * 100) : 0;
 
   async function uploadRunFile(file: File) {
+    if (runUploadingRef.current) return;
+    runUploadingRef.current = true;
     setRunUploading(true); setRunUploadError("");
     const form = new FormData(); form.append("file", file);
     const result = await aggregateMutation("/attachments", form);
     if (!result.ok) setRunUploadError(result.error ?? "serverError");
-    setRunUploading(false);
+    runUploadingRef.current = false; setRunUploading(false);
   }
 
   return <div className="mx-auto max-w-5xl space-y-6">
@@ -463,17 +503,17 @@ export default function RunWorkspace({ runId }: { runId: string }) {
         <div className="space-y-3"><h2 className="font-semibold">{r.planItems}</h2>{run.planItems.map(item => <div key={item.id} className="flex flex-col gap-3 rounded-xl border bg-surface-1 p-4 shadow-soft sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{item.title}</p><span className={`rounded-full border px-2 py-1 text-xs font-medium ${statusClass(item.state)}`}>{r.states[item.state]}</span><span className="rounded-full border bg-surface-2 px-2 py-1 text-xs text-text-muted">{r.itemKinds[item.kind]}</span></div>{item.executor && <p className="mt-2 text-xs text-text-muted">{r.user}: {item.executor}{item.startedAt ? ` · ${r.duration}: ${durationText(item.durationMs ?? (clock - Date.parse(item.startedAt)))}` : ""}</p>}</div>{item.childRunId ? <Link className={buttonClass} href={`/runs/${item.childRunId}`}>{item.state === "in_progress" && item.canResume ? r.resume : r.view}</Link> : run.canEdit && item.state === "not_started" ? <button className={buttonClass} disabled={aggregateBusy || conflict} onClick={() => {
           const storageKey = `run-item-start:${item.id}`; const key = sessionStorage.getItem(storageKey) ?? crypto.randomUUID(); sessionStorage.setItem(storageKey, key); void (async () => {
             const result = await aggregateMutation(`/items/${item.id}/start`, {}, "POST", key);
-            if (result.ok && result.runId) { sessionStorage.removeItem(storageKey); router.push(`/runs/${result.runId}`); }
+            if (result.ok && result.runId) { sessionStorage.removeItem(storageKey); push(`/runs/${result.runId}`); }
           })();
-        }}>{r.start}</button> : null}</div>)}</div>
+        }} aria-busy={aggregatePath === `/items/${item.id}/start`}>{aggregatePath === `/items/${item.id}/start` ? <BusyLabel label={r.starting} /> : r.start}</button> : null}</div>)}</div>
       </section>}
 
       {(run.canEdit || run.canOverride) && <section className="space-y-4 rounded-xl border bg-surface-1 p-5 shadow-soft">
         {run.canEdit && <label className="flex gap-2"><input type="checkbox" checked={manual} disabled={aggregateBusy} onChange={event => setManual(event.target.checked)} />{r.override}</label>}
         {(manual || run.canOverride) && <div className="space-y-3"><label>{r.final}<select className={inputClass} value={finalStatus} disabled={aggregateBusy} onChange={event => setFinalStatus(event.target.value as Result)}>{(["passed", "failed", "questionable"] as const).map(value => <option key={value} value={value}>{r.states[value]}</option>)}</select></label><label className="block">{r.reason}<textarea className={inputClass} maxLength={5000} disabled={aggregateBusy} value={reason} onChange={event => setReason(event.target.value)} /></label></div>}
-        {run.canEdit ? <><button className={primaryClass} disabled={aggregateBusy || conflict || !canComplete || (manual && !reason.trim())} onClick={() => void completeMutation(manual ? { override: { finalStatus, reason } } : {})}>{aggregateBusy ? r.saving : r.complete}</button>{!canComplete && <p className="text-sm text-text-muted">{r.incomplete}</p>}<label className="block">{r.cancelledReason}<textarea className={inputClass} maxLength={5000} disabled={aggregateBusy} value={cancelReason} onChange={event => setCancelReason(event.target.value)} /></label><button className={buttonClass} disabled={aggregateBusy || conflict || !cancelReason.trim()} onClick={() => void cancelMutation()}>{r.cancel}</button></> : <button className={buttonClass} disabled={aggregateBusy || conflict || !reason.trim()} onClick={() => void aggregateMutation("/overrides", { finalStatus, reason })}>{r.applyOverride}</button>}
+        {run.canEdit ? <><button className={primaryClass} disabled={aggregateBusy || conflict || !canComplete || (manual && !reason.trim())} aria-busy={aggregatePath === "/complete"} onClick={() => void completeMutation(manual ? { override: { finalStatus, reason } } : {})}>{aggregatePath === "/complete" ? <BusyLabel label={r.completing} /> : r.complete}</button>{!canComplete && <p className="text-sm text-text-muted">{r.incomplete}</p>}<label className="block">{r.cancelledReason}<textarea className={inputClass} maxLength={5000} disabled={aggregateBusy} value={cancelReason} onChange={event => setCancelReason(event.target.value)} /></label><button className={buttonClass} disabled={aggregateBusy || conflict || !cancelReason.trim()} aria-busy={aggregatePath === "/cancel"} onClick={() => void cancelMutation()}>{aggregatePath === "/cancel" ? <BusyLabel label={r.cancelling} /> : r.cancel}</button></> : <button className={buttonClass} disabled={aggregateBusy || conflict || !reason.trim()} aria-busy={aggregatePath === "/overrides"} onClick={() => void aggregateMutation("/overrides", { finalStatus, reason })}>{aggregatePath === "/overrides" ? <BusyLabel label={r.overriding} /> : r.applyOverride}</button>}
       </section>}
-      {run.planContext && run.lifecycle === "completed" && <section className="space-y-4 rounded-xl border border-emerald-500/40 bg-emerald-500/5 p-5 shadow-soft"><div><h2 className="text-lg font-semibold">{r.childCompleted}</h2><p className="mt-1 text-sm text-text-muted">{r.result}: {run.finalStatus ? r.states[run.finalStatus] : r.unknown}</p></div>{run.planContext.allProcessed && <p className="text-sm text-emerald-400">{r.allPlanItemsProcessed}</p>}<div className="flex flex-wrap gap-3">{run.planContext.nextActionable ? <><button className={primaryClass} disabled={nextBusy} onClick={() => void openNextPlanItem()}>{nextBusy ? r.loading : r.completeAndNext}</button><button className={buttonClass} onClick={() => void navigateSafely(`/runs/${run.planContext!.planRunId}`)}>{r.returnToPlan}</button></> : <button className={primaryClass} onClick={() => void navigateSafely(`/runs/${run.planContext!.planRunId}`)}>{r.returnToPlan}</button>}</div>{nextError && <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-400"><p>{r.nextOpenFailed}</p><p>{runErrorLabel(nextError, r)}</p></div>}</section>}
+      {run.planContext && run.lifecycle === "completed" && <section className="space-y-4 rounded-xl border border-emerald-500/40 bg-emerald-500/5 p-5 shadow-soft"><div><h2 className="text-lg font-semibold">{r.childCompleted}</h2><p className="mt-1 text-sm text-text-muted">{r.result}: {run.finalStatus ? r.states[run.finalStatus] : r.unknown}</p></div>{run.planContext.allProcessed && <p className="text-sm text-emerald-400">{r.allPlanItemsProcessed}</p>}<div className="flex flex-wrap gap-3">{run.planContext.nextActionable ? <><button className={primaryClass} disabled={nextBusy} aria-busy={nextBusy} onClick={() => void openNextPlanItem()}>{nextBusy ? <BusyLabel label={r.openingNext} /> : r.completeAndNext}</button><button className={buttonClass} onClick={() => void navigateSafely(`/runs/${run.planContext!.planRunId}`)}>{r.returnToPlan}</button></> : <button className={primaryClass} onClick={() => void navigateSafely(`/runs/${run.planContext!.planRunId}`)}>{r.returnToPlan}</button>}</div>{nextError && <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-400"><p>{r.nextOpenFailed}</p><p>{runErrorLabel(nextError, r)}</p></div>}</section>}
       {run.overrides.length > 0 && <section className="space-y-3 rounded-xl border p-5"><h2 className="font-semibold">{r.audit}</h2>{run.overrides.map(event => <div key={event.id} className="border-t pt-3"><p>{date(event.overriddenAt)} · {event.overriddenByEmailSnapshot}</p><p>{r.auto}: {r.states[event.autoStatus]} · {r.previous}: {r.states[event.previousFinalStatus]} → {r.final}: {r.states[event.finalStatus]}</p><p className="whitespace-pre-wrap">{event.reason}</p></div>)}</section>}
     </>}
   </div>;
