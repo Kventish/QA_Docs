@@ -140,6 +140,7 @@ npm run db:seed
 | `ADMIN_PASSWORD` | Пароль seed-admin. |
 
 Локальные `.env*` содержат secrets и не должны попадать в Git. В репозитории хранится только `.env.example` без рабочих credentials.
+Команда `npm run db:seed` требует явно заданные `ADMIN_EMAIL` и `ADMIN_PASSWORD`; fallback credentials не используются.
 
 ### Выбор локального environment
 

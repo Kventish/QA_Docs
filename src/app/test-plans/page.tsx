@@ -76,6 +76,7 @@ export default function TestPlansPage() {
   }, [projectId, t]);
 
   async function deleteTestPlan(id: string) {
+    if (deletingId !== null) return;
     if (!confirm(t("testPlans.deleteConfirm"))) return;
     setError(null);
     setDeletingId(id);
@@ -87,7 +88,7 @@ export default function TestPlansPage() {
 
     if (!res) {
       setDeletingId(null);
-      setError(t("testPlans.loadFailed"));
+      setError(t("testPlans.deleteFailed"));
       return;
     }
     if (res.status === 401) {
@@ -101,7 +102,7 @@ export default function TestPlansPage() {
     }
     if (!res.ok) {
       setDeletingId(null);
-      setError(t("testPlans.loadFailed"));
+      setError(res.status === 409 ? t("common.deleteConflict") : t("testPlans.deleteFailed"));
       return;
     }
 
@@ -169,7 +170,7 @@ export default function TestPlansPage() {
                   <td className="px-4 py-3 text-right">
                     <button
                       className="rounded-lg border bg-surface-2 px-2 py-1 text-xs font-medium hover:bg-surface-1 disabled:opacity-60"
-                      disabled={deletingId === p.id}
+                      disabled={deletingId !== null}
                       onClick={() => deleteTestPlan(p.id)}
                       title={t("testPlans.delete")}
                     >

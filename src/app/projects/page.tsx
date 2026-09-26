@@ -104,6 +104,7 @@ export default function ProjectsPage() {
   }
 
   async function deleteProject(id: string) {
+    if (deletingId !== null) return;
     if (!confirm(t("projects.deleteConfirm"))) return;
     setError(null);
     setDeletingId(id);
@@ -128,7 +129,7 @@ export default function ProjectsPage() {
     }
     if (!res.ok) {
       setDeletingId(null);
-      setError(t("projects.deleteFailed"));
+      setError(res.status === 409 ? t("common.deleteConflict") : t("projects.deleteFailed"));
       return;
     }
 
@@ -175,7 +176,7 @@ export default function ProjectsPage() {
               {isAdmin && (
                 <button
                   className="rounded-lg border bg-surface-2 px-2 py-1 text-xs font-medium hover:bg-surface-1 disabled:opacity-60"
-                  disabled={deletingId === p.id}
+                  disabled={deletingId !== null}
                   onClick={() => deleteProject(p.id)}
                   title={t("projects.deleteProject")}
                 >

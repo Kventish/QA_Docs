@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { apiRequireRole } from "@/lib/api-auth";
 import { getDefaultProjectIdForSession } from "@/lib/project";
 import { canAccessProject } from "@/lib/project-access";
+import { mutationErrorResponse } from "@/lib/api-mutation-errors";
 
 export const runtime = "nodejs";
 
@@ -87,12 +88,11 @@ export async function POST(req: Request) {
       include: { cases: true, checklists: true }
     });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to create test plan" },
-      { status: 500 }
-    );
+    return mutationErrorResponse(error, {
+      action: "create",
+      entityType: "testPlan"
+    });
   }
 
   return NextResponse.json({ testPlan: created });
 }
-

@@ -74,6 +74,7 @@ export default function ChecklistsPage() {
   }, [projectId, t]);
 
   async function deleteChecklist(id: string) {
+    if (deletingId !== null) return;
     if (!confirm(t("checklists.deleteConfirm"))) return;
     setError(null);
     setDeletingId(id);
@@ -99,7 +100,7 @@ export default function ChecklistsPage() {
     }
     if (!res.ok) {
       setDeletingId(null);
-      setError(t("checklists.deleteFailed"));
+      setError(res.status === 409 ? t("common.deleteConflict") : t("checklists.deleteFailed"));
       return;
     }
 
@@ -167,7 +168,7 @@ export default function ChecklistsPage() {
                   <td className="px-4 py-3 text-right">
                     <button
                       className="rounded-lg border bg-surface-2 px-2 py-1 text-xs font-medium hover:bg-surface-1 disabled:opacity-60"
-                      disabled={deletingId === c.id}
+                      disabled={deletingId !== null}
                       onClick={() => deleteChecklist(c.id)}
                       title={t("checklists.delete")}
                     >
