@@ -7,6 +7,7 @@ import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "re
 import { useLocale, notifyLocaleChanged, useT } from "@/lib/i18n/useT";
 import { startNavigation } from "@/components/navigation/NavigationProgress";
 import { useGlobalLoading } from "@/components/loading/GlobalLoadingProvider";
+import { GlobalBackButton } from "@/components/navigation/GlobalBackButton";
 
 type SearchResult = {
   testCases: { id: string; title: string }[];
@@ -321,7 +322,10 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           </header>
 
-          <main className="flex-1 px-4 py-6 md:px-6">{children}</main>
+          <main className="flex-1 px-4 py-6 md:px-6">
+            <GlobalBackButton enabled={isAuthed && pathname !== "/login"} />
+            {children}
+          </main>
         </div>
       </div>
     </div>
