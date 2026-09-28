@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useT } from "@/lib/i18n/useT";
 import { ProjectFormSelect } from "@/components/ProjectSelect";
+import { useGlobalLoading } from "@/components/loading/GlobalLoadingProvider";
+import { startNavigation } from "@/components/navigation/NavigationProgress";
 
 type Project = { id: string; name: string; slug: string };
 type TestCaseLite = { id: string; title: string; status: string };
@@ -37,6 +39,7 @@ type TestPlanApiResponse = {
 
 export default function EditTestPlanPage({ params }: { params: { id: string } }) {
   const t = useT();
+  const { runWithLoading } = useGlobalLoading();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +47,7 @@ export default function EditTestPlanPage({ params }: { params: { id: string } })
   const [projects, setProjects] = useState<Project[]>([]);
   const [cases, setCases] = useState<TestCaseLite[]>([]);
   const [checklists, setChecklists] = useState<ChecklistLite[]>([]);
+  const [optionsLoading, setOptionsLoading] = useState(false);
 
   const [projectId, setProjectId] = useState("");
   const [title, setTitle] = useState("");
@@ -75,24 +79,38 @@ export default function EditTestPlanPage({ params }: { params: { id: string } })
     if (!projectId) {
       setCases([]);
       setChecklists([]);
+      setOptionsLoading(false);
       return;
     }
 
+    let alive = true;
     setCases([]);
     setChecklists([]);
-    fetch(`/api/test-cases?projectId=${encodeURIComponent(projectId)}`, {
-      credentials: "include"
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((json) => setCases((json?.testCases ?? []) as TestCaseLite[]))
-      .catch(() => setCases([]));
-
-    fetch(`/api/checklists?projectId=${encodeURIComponent(projectId)}`, {
-      credentials: "include"
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((json) => setChecklists((json?.checklists ?? []) as ChecklistLite[]))
-      .catch(() => setChecklists([]));
+    setOptionsLoading(true);
+    Promise.all([
+      fetch(`/api/test-cases?projectId=${encodeURIComponent(projectId)}`, {
+        credentials: "include"
+      }).then((res) => (res.ok ? res.json() : null)),
+      fetch(`/api/checklists?projectId=${encodeURIComponent(projectId)}`, {
+        credentials: "include"
+      }).then((res) => (res.ok ? res.json() : null))
+    ])
+      .then(([caseJson, checklistJson]) => {
+        if (!alive) return;
+        setCases((caseJson?.testCases ?? []) as TestCaseLite[]);
+        setChecklists((checklistJson?.checklists ?? []) as ChecklistLite[]);
+      })
+      .catch(() => {
+        if (!alive) return;
+        setCases([]);
+        setChecklists([]);
+      })
+      .finally(() => {
+        if (alive) setOptionsLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
   }, [projectId]);
 
   useEffect(() => {
@@ -131,6 +149,7 @@ export default function EditTestPlanPage({ params }: { params: { id: string } })
       .catch((err) => {
         if (!alive) return;
         if (err?.status === 401) {
+          startNavigation();
           window.location.assign(`/login?next=${encodeURIComponent(`/test-plans/${params.id}/edit`)}`);
           return;
         }
@@ -161,7 +180,7 @@ export default function EditTestPlanPage({ params }: { params: { id: string } })
     if (!validate()) return;
 
     setSaving(true);
-    const res = await fetch(`/api/test-plans/${params.id}`, {
+    const res = await runWithLoading(() => fetch(`/api/test-plans/${params.id}`, {
       method: "PATCH",
       credentials: "include",
       headers: { "content-type": "application/json" },
@@ -178,7 +197,7 @@ export default function EditTestPlanPage({ params }: { params: { id: string } })
         testCaseIds: selectedIds,
         checklistIds: selectedChecklistIds
       })
-    }).catch(() => null);
+    }).catch(() => null), t("common.saving"));
 
     if (!res) {
       setSaving(false);
@@ -187,6 +206,7 @@ export default function EditTestPlanPage({ params }: { params: { id: string } })
     }
 
     if (res.status === 401) {
+      startNavigation();
       window.location.assign(`/login?next=${encodeURIComponent(`/test-plans/${params.id}/edit`)}`);
       return;
     }
@@ -203,6 +223,7 @@ export default function EditTestPlanPage({ params }: { params: { id: string } })
       return;
     }
 
+    startNavigation();
     window.location.assign(`/test-plans/${params.id}`);
   }
 
@@ -244,6 +265,7 @@ export default function EditTestPlanPage({ params }: { params: { id: string } })
             {fieldErrors.projectId ? (
               <p className="text-xs text-red-400">{fieldErrors.projectId}</p>
             ) : null}
+            {optionsLoading ? <p role="status" className="text-xs text-text-muted">{t("common.loading")}</p> : null}
           </div>
 
           <div className="space-y-1">
@@ -355,7 +377,13 @@ export default function EditTestPlanPage({ params }: { params: { id: string } })
                       <td className="px-4 py-2 text-text-muted">{t(`testPlans.status.${testCase.status}` as any)}</td>
                     </tr>
                   ))}
-                  {projectId && cases.length === 0 ? (
+                  {optionsLoading ? (
+                    <tr>
+                      <td className="px-4 py-6 text-text-muted" colSpan={3}>
+                        {t("common.loading")}
+                      </td>
+                    </tr>
+                  ) : projectId && cases.length === 0 ? (
                     <tr>
                       <td className="px-4 py-6 text-text-muted" colSpan={3}>
                         {t("testPlans.form.noCasesInProject")}
@@ -422,7 +450,13 @@ export default function EditTestPlanPage({ params }: { params: { id: string } })
                       <td className="px-4 py-2 text-text-muted">{t(`checklists.status.${checklist.status}` as any)}</td>
                     </tr>
                   ))}
-                  {projectId && checklists.length === 0 ? (
+                  {optionsLoading ? (
+                    <tr>
+                      <td className="px-4 py-6 text-text-muted" colSpan={3}>
+                        {t("common.loading")}
+                      </td>
+                    </tr>
+                  ) : projectId && checklists.length === 0 ? (
                     <tr>
                       <td className="px-4 py-6 text-text-muted" colSpan={3}>
                         {t("testPlans.form.noChecklistsInProject")}

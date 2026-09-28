@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import { useLocale, useT } from "@/lib/i18n/useT";
 import { runLabels, runErrorLabel } from "@/lib/i18n/dictionaries/run-engine";
 import { durationText, Kind, documentPaths } from "@/lib/run-engine/domain";
+import { useGlobalLoading } from "@/components/loading/GlobalLoadingProvider";
+import { startNavigation } from "@/components/navigation/NavigationProgress";
 
 type ActiveRun = { id: string; startedAt: string; startedByEmailSnapshot: string };
 const documentKeys = { test_case: "testCases", checklist: "checklists", test_plan: "testPlans" } as const;
@@ -20,6 +22,7 @@ export default function StartRun({ kind, id, title, status, executableCount, act
   const locale = useLocale();
   const t = useT();
   const r = runLabels[locale];
+  const { startLoading, stopLoading } = useGlobalLoading();
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const key = useRef<string>();
@@ -36,6 +39,7 @@ export default function StartRun({ kind, id, title, status, executableCount, act
   async function start() {
     if (busyRef.current) return;
     busyRef.current = true; setBusy(true); setError("");
+    const loadingToken = startLoading(r.starting);
     const storageKey = `run-start:${kind}:${id}`;
     try {
       key.current = key.current ?? sessionStorage.getItem(storageKey) ?? crypto.randomUUID();
@@ -44,9 +48,10 @@ export default function StartRun({ kind, id, title, status, executableCount, act
       const body = await response.json();
       if (!response.ok) { setError(body.error ?? "serverError"); return; }
       sessionStorage.removeItem(storageKey);
+      startNavigation(r.loading);
       window.location.assign(`/runs/${body.runId}`);
     } catch { setError("network"); }
-    finally { setBusy(false); busyRef.current = false; }
+    finally { stopLoading(loadingToken); setBusy(false); busyRef.current = false; }
   }
 
   const primaryClass = "inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-500 disabled:cursor-not-allowed disabled:opacity-60";

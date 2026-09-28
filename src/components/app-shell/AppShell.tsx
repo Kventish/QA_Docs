@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, notifyLocaleChanged, useT } from "@/lib/i18n/useT";
-import NavigationProgress from "@/components/navigation/NavigationProgress";
+import { startNavigation } from "@/components/navigation/NavigationProgress";
+import { useGlobalLoading } from "@/components/loading/GlobalLoadingProvider";
 
 type SearchResult = {
   testCases: { id: string; title: string }[];
@@ -35,6 +36,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [sessionLoading, setSessionLoading] = useState(true);
   const locale = useLocale();
   const t = useT();
+  const { runWithLoading } = useGlobalLoading();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResult | null>(null);
@@ -141,7 +143,6 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen">
-      <NavigationProgress />
       <div className="flex min-h-screen">
         <aside className="fixed left-0 top-0 hidden h-screen w-64 shrink-0 border-r bg-surface-1 md:block">
           <div className="flex h-full flex-col overflow-y-auto px-5 py-4">
@@ -185,13 +186,15 @@ export function AppShell({ children }: { children: ReactNode }) {
                     locale === "en" ? "border-brand-500/60 text-text-primary" : "text-text-muted"
                   ].join(" ")}
                   onClick={async () => {
-                    await fetch("/api/i18n/locale", {
-                      method: "POST",
-                      headers: { "content-type": "application/json" },
-                      body: JSON.stringify({ locale: "en" })
-                    }).catch(() => null);
-                    notifyLocaleChanged();
-                    router.refresh();
+                    await runWithLoading(async () => {
+                      await fetch("/api/i18n/locale", {
+                        method: "POST",
+                        headers: { "content-type": "application/json" },
+                        body: JSON.stringify({ locale: "en" })
+                      }).catch(() => null);
+                      notifyLocaleChanged();
+                      router.refresh();
+                    }, t("common.loading"));
                   }}
                 >
                   EN
@@ -203,13 +206,15 @@ export function AppShell({ children }: { children: ReactNode }) {
                     locale === "ru" ? "border-brand-500/60 text-text-primary" : "text-text-muted"
                   ].join(" ")}
                   onClick={async () => {
-                    await fetch("/api/i18n/locale", {
-                      method: "POST",
-                      headers: { "content-type": "application/json" },
-                      body: JSON.stringify({ locale: "ru" })
-                    }).catch(() => null);
-                    notifyLocaleChanged();
-                    router.refresh();
+                    await runWithLoading(async () => {
+                      await fetch("/api/i18n/locale", {
+                        method: "POST",
+                        headers: { "content-type": "application/json" },
+                        body: JSON.stringify({ locale: "ru" })
+                      }).catch(() => null);
+                      notifyLocaleChanged();
+                      router.refresh();
+                    }, t("common.loading"));
                   }}
                 >
                   RU
@@ -300,9 +305,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                     <button
                       className="rounded-lg border bg-surface-2 px-3 py-2 text-sm font-medium hover:bg-surface-1"
                       onClick={async () => {
-                        await fetch("/api/auth/logout", { method: "POST" });
-                        setSession(null);
-                        window.location.assign("/");
+                        await runWithLoading(async () => {
+                          await fetch("/api/auth/logout", { method: "POST" });
+                          setSession(null);
+                          startNavigation();
+                          window.location.assign("/");
+                        }, t("common.loading"));
                       }}
                     >
                       {t("common.signOut")}

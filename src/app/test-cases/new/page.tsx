@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useT } from "@/lib/i18n/useT";
 import { ProjectFormSelect } from "@/components/ProjectSelect";
+import { useGlobalLoading } from "@/components/loading/GlobalLoadingProvider";
+import { startNavigation } from "@/components/navigation/NavigationProgress";
 
 type EditRow =
   | { type: "step"; step: string; expectedResult: string; actualResult: string }
@@ -30,8 +32,10 @@ function serializeSteps(rows: EditRow[]) {
 
 export default function NewTestCasePage() {
   const t = useT();
+  const { runWithLoading } = useGlobalLoading();
   const [projects, setProjects] = useState<Project[]>([]);
   const [caseOptions, setCaseOptions] = useState<Array<{ id: string; title: string }>>([]);
+  const [caseOptionsLoading, setCaseOptionsLoading] = useState(false);
   const [projectId, setProjectId] = useState("");
   const [title, setTitle] = useState("");
   const [status, setStatus] = useState<"draft" | "active" | "archived">("draft");
@@ -57,16 +61,23 @@ export default function NewTestCasePage() {
   useEffect(() => {
     if (!projectId) {
       setCaseOptions([]);
+      setCaseOptionsLoading(false);
       return;
     }
     let alive = true;
+    setCaseOptionsLoading(true);
     fetch(`/api/test-cases?projectId=${encodeURIComponent(projectId)}`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
         if (!alive) return;
         setCaseOptions((j?.testCases ?? []) as Array<{ id: string; title: string }>);
       })
-      .catch(() => setCaseOptions([]));
+      .catch(() => {
+        if (alive) setCaseOptions([]);
+      })
+      .finally(() => {
+        if (alive) setCaseOptionsLoading(false);
+      });
     return () => {
       alive = false;
     };
@@ -124,7 +135,7 @@ export default function NewTestCasePage() {
     if (!validate()) return;
 
     setSaving(true);
-    const res = await fetch("/api/test-cases", {
+    const res = await runWithLoading(() => fetch("/api/test-cases", {
       method: "POST",
       credentials: "include",
       headers: { "content-type": "application/json" },
@@ -140,7 +151,7 @@ export default function NewTestCasePage() {
         postconditions,
         steps: serializeSteps(steps)
       })
-    }).catch(() => null);
+    }).catch(() => null), t("common.creating"));
 
     if (!res) {
       setSaving(false);
@@ -154,6 +165,7 @@ export default function NewTestCasePage() {
       return;
     }
 
+    startNavigation();
     window.location.assign(`/test-cases/${json?.testCase?.id ?? ""}`);
   }
 
@@ -180,6 +192,7 @@ export default function NewTestCasePage() {
               className={`w-full rounded-lg border bg-surface-2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 ${fieldErrors.projectId ? "border-red-500" : ""}`}
             />
             {fieldErrors.projectId ? <p className="text-xs text-red-400">{fieldErrors.projectId}</p> : null}
+            {caseOptionsLoading ? <p role="status" className="text-xs text-text-muted">{t("common.loading")}</p> : null}
           </div>
 
           <div className="space-y-1">
@@ -280,9 +293,10 @@ export default function NewTestCasePage() {
                         <select
                           className="w-full rounded-lg border bg-surface-2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                           value={s.testCaseId}
+                          disabled={caseOptionsLoading}
                           onChange={(e) => updateInclude(idx, e.target.value)}
                         >
-                          <option value="">{t("testCases.form.selectTestCaseToInclude")}</option>
+                          <option value="">{caseOptionsLoading ? t("common.loading") : t("testCases.form.selectTestCaseToInclude")}</option>
                           {caseOptions.map((c) => (
                             <option key={c.id} value={c.id}>
                               {c.title}

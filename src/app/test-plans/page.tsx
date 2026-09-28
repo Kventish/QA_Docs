@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useLocale, useT } from "@/lib/i18n/useT";
 import { ProjectFilterSelect } from "@/components/ProjectSelect";
+import { useGlobalLoading } from "@/components/loading/GlobalLoadingProvider";
+import { startNavigation } from "@/components/navigation/NavigationProgress";
 
 type TestPlan = {
   id: string;
@@ -17,6 +19,7 @@ type Project = { id: string; name: string; slug: string };
 export default function TestPlansPage() {
   const locale = useLocale();
   const t = useT();
+  const { runWithLoading } = useGlobalLoading();
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState("");
   const [items, setItems] = useState<TestPlan[]>([]);
@@ -63,6 +66,7 @@ export default function TestPlansPage() {
       return;
     }
     if (res.status === 401) {
+      startNavigation();
       window.location.assign(`/login?next=${encodeURIComponent("/test-plans")}`);
       return;
     }
@@ -80,34 +84,29 @@ export default function TestPlansPage() {
     if (!confirm(t("testPlans.deleteConfirm"))) return;
     setError(null);
     setDeletingId(id);
+    try {
+      await runWithLoading(async () => {
+        const res = await fetch(`/api/test-plans/${id}`, {
+          method: "DELETE",
+          credentials: "include"
+        }).catch(() => null);
 
-    const res = await fetch(`/api/test-plans/${id}`, {
-      method: "DELETE",
-      credentials: "include"
-    }).catch(() => null);
-
-    if (!res) {
+        if (!res) { setError(t("testPlans.deleteFailed")); return; }
+        if (res.status === 401) {
+          startNavigation();
+          window.location.assign(`/login?next=${encodeURIComponent("/test-plans")}`);
+          return;
+        }
+        if (res.status === 403) { setError(t("validation.forbidden")); return; }
+        if (!res.ok) {
+          setError(res.status === 409 ? t("common.deleteConflict") : t("testPlans.deleteFailed"));
+          return;
+        }
+        await refresh();
+      }, t("common.deleting"));
+    } finally {
       setDeletingId(null);
-      setError(t("testPlans.deleteFailed"));
-      return;
     }
-    if (res.status === 401) {
-      window.location.assign(`/login?next=${encodeURIComponent("/test-plans")}`);
-      return;
-    }
-    if (res.status === 403) {
-      setDeletingId(null);
-      setError(t("validation.forbidden"));
-      return;
-    }
-    if (!res.ok) {
-      setDeletingId(null);
-      setError(res.status === 409 ? t("common.deleteConflict") : t("testPlans.deleteFailed"));
-      return;
-    }
-
-    setDeletingId(null);
-    await refresh();
   }
 
   return (
