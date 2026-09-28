@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { apiRequireRole } from "@/lib/api-auth";
 import { canAccessProject } from "@/lib/project-access";
+import { deleteErrorResponse, mutationErrorResponse } from "@/lib/api-mutation-errors";
 
 export const runtime = "nodejs";
 
@@ -86,10 +87,11 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       data: updatePayload
     });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to update test plan" },
-      { status: 500 }
-    );
+    return mutationErrorResponse(error, {
+      action: "update",
+      entityType: "testPlan",
+      entityId: params.id
+    });
   }
 
   return NextResponse.json({ ok: true });
@@ -99,7 +101,15 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   const auth = await apiRequireRole("editor");
   if (!auth.ok) return NextResponse.json({ error: "Unauthorized" }, { status: auth.status });
 
-  await prisma.testPlan.delete({ where: { id: params.id } }).catch(() => null);
-  return NextResponse.json({ ok: true });
+  try {
+    await prisma.testPlan.delete({ where: { id: params.id } });
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    return deleteErrorResponse(error, {
+      action: "delete",
+      entityType: "testPlan",
+      entityId: params.id
+    });
+  }
 }
 

@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocale, useT } from "@/lib/i18n/useT";
+import { useGlobalLoading } from "@/components/loading/GlobalLoadingProvider";
+import { startNavigation } from "@/components/navigation/NavigationProgress";
 
 type Project = {
   id: string;
@@ -20,12 +22,14 @@ type Project = {
 export default function ProjectsPage() {
   const locale = useLocale();
   const t = useT();
+  const { runWithLoading } = useGlobalLoading();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const mutationBusyRef = useRef(false);
   const [role, setRole] = useState<"admin" | "editor" | "viewer" | null>(null);
 
   const canEdit = role === "editor" || role === "admin";
@@ -50,6 +54,7 @@ export default function ProjectsPage() {
       return;
     }
     if (res.status === 401) {
+      startNavigation();
       window.location.assign(`/login?next=${encodeURIComponent("/projects")}`);
       return;
     }
@@ -69,71 +74,66 @@ export default function ProjectsPage() {
       setError(t("projects.nameTooShort"));
       return;
     }
+    if (mutationBusyRef.current) return;
+    mutationBusyRef.current = true;
     setCreating(true);
-    const res = await fetch("/api/projects", {
-      method: "POST",
-      credentials: "include",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name })
-    }).catch(() => null);
+    try {
+      await runWithLoading(async () => {
+        const res = await fetch("/api/projects", {
+          method: "POST",
+          credentials: "include",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ name })
+        }).catch(() => null);
 
-    if (!res) {
-      setCreating(false);
-      setError(t("projects.createFailed"));
-      return;
-    }
+        if (!res) { setError(t("projects.createFailed")); return; }
+        if (res.status === 401) {
+          startNavigation();
+          window.location.assign(`/login?next=${encodeURIComponent("/projects")}`);
+          return;
+        }
+        if (res.status === 403) { setError(t("validation.forbidden")); return; }
+        if (!res.ok) { setError(t("projects.createFailed")); return; }
 
-    if (res.status === 401) {
-      window.location.assign(`/login?next=${encodeURIComponent("/projects")}`);
-      return;
-    }
-    if (res.status === 403) {
+        setName("");
+        await refresh();
+      }, t("common.creating"));
+    } finally {
       setCreating(false);
-      setError(t("validation.forbidden"));
-      return;
+      mutationBusyRef.current = false;
     }
-    if (!res.ok) {
-      setCreating(false);
-      setError(t("projects.createFailed"));
-      return;
-    }
-
-    setName("");
-    setCreating(false);
-    await refresh();
   }
 
   async function deleteProject(id: string) {
+    if (deletingId !== null || mutationBusyRef.current) return;
     if (!confirm(t("projects.deleteConfirm"))) return;
+    mutationBusyRef.current = true;
     setError(null);
     setDeletingId(id);
-    const res = await fetch(`/api/projects/${id}`, {
-      method: "DELETE",
-      credentials: "include"
-    }).catch(() => null);
+    try {
+      await runWithLoading(async () => {
+        const res = await fetch(`/api/projects/${id}`, {
+          method: "DELETE",
+          credentials: "include"
+        }).catch(() => null);
 
-    if (!res) {
+        if (!res) { setError(t("projects.deleteFailed")); return; }
+        if (res.status === 401) {
+          startNavigation();
+          window.location.assign(`/login?next=${encodeURIComponent("/projects")}`);
+          return;
+        }
+        if (res.status === 403) { setError(t("validation.forbidden")); return; }
+        if (!res.ok) {
+          setError(res.status === 409 ? t("common.deleteConflict") : t("projects.deleteFailed"));
+          return;
+        }
+        await refresh();
+      }, t("common.deleting"));
+    } finally {
       setDeletingId(null);
-      setError(t("projects.deleteFailed"));
-      return;
+      mutationBusyRef.current = false;
     }
-    if (res.status === 401) {
-      window.location.assign(`/login?next=${encodeURIComponent("/projects")}`);
-      return;
-    }
-    if (res.status === 403) {
-      setDeletingId(null);
-      setError(t("validation.forbidden"));
-      return;
-    }
-    if (!res.ok) {
-      setDeletingId(null);
-      setError(t("projects.deleteFailed"));
-      return;
-    }
-
-    setDeletingId(null);
-    await refresh();
   }
 
   return (
@@ -151,8 +151,9 @@ export default function ProjectsPage() {
             <button
               className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium hover:bg-brand-500 disabled:opacity-60"
               disabled={creating}
+              aria-busy={creating}
             >
-              {creating ? t("common.loading") : t("projects.newProject")}
+              {creating ? t("common.creating") : t("projects.newProject")}
             </button>
           </form>
         )}
@@ -174,7 +175,7 @@ export default function ProjectsPage() {
               {isAdmin && (
                 <button
                   className="rounded-lg border bg-surface-2 px-2 py-1 text-xs font-medium hover:bg-surface-1 disabled:opacity-60"
-                  disabled={deletingId === p.id}
+                  disabled={deletingId !== null}
                   onClick={() => deleteProject(p.id)}
                   title={t("projects.deleteProject")}
                 >

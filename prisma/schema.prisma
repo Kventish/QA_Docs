@@ -241,6 +241,13 @@ enum ResultStatus {
   questionable
 }
 
+enum StepResultStatus {
+  passed
+  failed
+  questionable
+  blocked
+}
+
 enum Severity {
   low
   medium
@@ -310,7 +317,7 @@ model StepRunResult {
   id String @id @default(cuid())
   runId String
   occurrenceKey String
-  result ResultStatus?
+  result StepResultStatus?
   severity Severity?
   actualResult String @default("")
   updatedById String?

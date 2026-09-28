@@ -2,9 +2,12 @@
 
 import { useState } from "react";
 import { useT } from "@/lib/i18n/useT";
+import { useGlobalLoading } from "@/components/loading/GlobalLoadingProvider";
+import { startNavigation } from "@/components/navigation/NavigationProgress";
 
 export default function ChangePasswordForm() {
   const t = useT();
+  const { runWithLoading } = useGlobalLoading();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -36,12 +39,12 @@ export default function ChangePasswordForm() {
     if (!validate()) return;
 
     setSaving(true);
-    const res = await fetch("/api/auth/change-password", {
+    const res = await runWithLoading(() => fetch("/api/auth/change-password", {
       method: "POST",
       credentials: "include",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ currentPassword, newPassword })
-    }).catch(() => null);
+    }).catch(() => null), t("common.saving"));
 
     if (!res) {
       setSaving(false);
@@ -51,6 +54,7 @@ export default function ChangePasswordForm() {
 
     const json = (await res.json().catch(() => null)) as { error?: string };
     if (res.status === 401) {
+      startNavigation();
       window.location.assign("/login?next=%2Fprofile");
       return;
     }

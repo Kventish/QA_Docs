@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { apiRequireRole } from "@/lib/api-auth";
 import { canAccessProject } from "@/lib/project-access";
 import { parseStoredSteps, validateStepsForSave } from "@/lib/test-case-includes";
+import { deleteErrorResponse } from "@/lib/api-mutation-errors";
 
 export const runtime = "nodejs";
 
@@ -109,6 +110,14 @@ export async function DELETE(
   const auth = await apiRequireRole("editor");
   if (!auth.ok) return NextResponse.json({ error: "Unauthorized" }, { status: auth.status });
 
-  await prisma.testCase.delete({ where: { id: params.id } }).catch(() => null);
-  return NextResponse.json({ ok: true });
+  try {
+    await prisma.testCase.delete({ where: { id: params.id } });
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    return deleteErrorResponse(error, {
+      action: "delete",
+      entityType: "testCase",
+      entityId: params.id
+    });
+  }
 }

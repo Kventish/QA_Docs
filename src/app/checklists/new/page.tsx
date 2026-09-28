@@ -1,15 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useLocale, useT } from "@/lib/i18n/useT";
+import { useT } from "@/lib/i18n/useT";
 import { ProjectFormSelect } from "@/components/ProjectSelect";
+import { useGlobalLoading } from "@/components/loading/GlobalLoadingProvider";
+import { startNavigation } from "@/components/navigation/NavigationProgress";
 
 type Item = { text: string; checked: boolean; expectedResult: string };
 type Project = { id: string; name: string; slug: string };
 
 export default function NewChecklistPage() {
-  const locale = useLocale();
   const t = useT();
+  const { runWithLoading } = useGlobalLoading();
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState("");
   const [title, setTitle] = useState("");
@@ -48,7 +50,7 @@ export default function NewChecklistPage() {
     if (!validate()) return;
 
     setSaving(true);
-    const res = await fetch("/api/checklists", {
+    const res = await runWithLoading(() => fetch("/api/checklists", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -61,7 +63,7 @@ export default function NewChecklistPage() {
           .filter(Boolean),
         items
       })
-    }).catch(() => null);
+    }).catch(() => null), t("common.creating"));
 
     if (!res) {
       setSaving(false);
@@ -75,6 +77,7 @@ export default function NewChecklistPage() {
       return;
     }
 
+    startNavigation();
     window.location.assign(`/checklists/${json?.checklist?.id ?? ""}`);
   }
 
@@ -250,8 +253,9 @@ export default function NewChecklistPage() {
           <button
             className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium hover:bg-brand-500 disabled:opacity-60"
             disabled={saving}
+            aria-busy={saving}
           >
-            {saving ? t("common.loading") : t("common.create")}
+            {saving ? t("common.creating") : t("common.create")}
           </button>
         </form>
       </div>

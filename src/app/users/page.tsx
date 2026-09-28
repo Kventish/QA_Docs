@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocale, useT } from "@/lib/i18n/useT";
+import { useGlobalLoading } from "@/components/loading/GlobalLoadingProvider";
+import { startNavigation } from "@/components/navigation/NavigationProgress";
 
 type User = {
   id: string;
@@ -14,10 +16,12 @@ type User = {
 export default function UsersPage() {
   const locale = useLocale();
   const t = useT();
+  const { runWithLoading } = useGlobalLoading();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const deletingRef = useRef(false);
 
   async function refresh() {
     setLoading(true);
@@ -32,10 +36,12 @@ export default function UsersPage() {
       return;
     }
     if (res.status === 401) {
+      startNavigation();
       window.location.assign(`/login?next=${encodeURIComponent("/users")}`);
       return;
     }
     if (res.status === 403) {
+      startNavigation();
       window.location.assign("/");
       return;
     }
@@ -49,32 +55,32 @@ export default function UsersPage() {
   }, []);
 
   async function deleteUser(id: string) {
+    if (deletingRef.current) return;
     if (!confirm(t("users.deleteConfirm"))) return;
+    deletingRef.current = true;
     setError(null);
     setDeletingId(id);
-    const res = await fetch(`/api/users/${id}`, {
-      method: "DELETE",
-      credentials: "include"
-    }).catch(() => null);
+    try {
+      await runWithLoading(async () => {
+        const res = await fetch(`/api/users/${id}`, {
+          method: "DELETE",
+          credentials: "include"
+        }).catch(() => null);
 
-    if (!res) {
+        if (!res) { setError(t("users.deleteFailed")); return; }
+        const json = await res.json().catch(() => null);
+        if (res.status === 401) {
+          startNavigation();
+          window.location.assign(`/login?next=${encodeURIComponent("/users")}`);
+          return;
+        }
+        if (!res.ok) { setError(json?.error ?? t("users.deleteFailed")); return; }
+        setUsers((prev) => prev.filter((u) => u.id !== id));
+      }, t("common.deleting"));
+    } finally {
       setDeletingId(null);
-      setError(t("users.deleteFailed"));
-      return;
+      deletingRef.current = false;
     }
-    const json = await res.json().catch(() => null);
-    if (res.status === 401) {
-      window.location.assign(`/login?next=${encodeURIComponent("/users")}`);
-      return;
-    }
-    if (!res.ok) {
-      setDeletingId(null);
-      setError(json?.error ?? t("users.deleteFailed"));
-      return;
-    }
-
-    setUsers((prev) => prev.filter((u) => u.id !== id));
-    setDeletingId(null);
   }
 
   return (
@@ -127,7 +133,7 @@ export default function UsersPage() {
                     </Link>
                     <button
                       className="rounded-lg border bg-surface-2 px-2 py-1 text-xs font-medium hover:bg-surface-1 disabled:opacity-60"
-                      disabled={deletingId === u.id}
+                      disabled={deletingId !== null}
                       onClick={() => deleteUser(u.id)}
                     >
                       {deletingId === u.id ? "…" : t("users.delete")}

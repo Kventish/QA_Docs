@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useLocale, useT } from "@/lib/i18n/useT";
 import { ProjectFilterSelect } from "@/components/ProjectSelect";
+import { useGlobalLoading } from "@/components/loading/GlobalLoadingProvider";
+import { startNavigation } from "@/components/navigation/NavigationProgress";
 
 type Checklist = {
   id: string;
@@ -17,6 +19,7 @@ type Project = { id: string; name: string; slug: string };
 export default function ChecklistsPage() {
   const locale = useLocale();
   const t = useT();
+  const { runWithLoading } = useGlobalLoading();
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState("");
   const [items, setItems] = useState<Checklist[]>([]);
@@ -61,6 +64,7 @@ export default function ChecklistsPage() {
       return;
     }
     if (res.status === 401) {
+      startNavigation();
       window.location.assign(`/login?next=${encodeURIComponent("/checklists")}`);
       return;
     }
@@ -74,37 +78,33 @@ export default function ChecklistsPage() {
   }, [projectId, t]);
 
   async function deleteChecklist(id: string) {
+    if (deletingId !== null) return;
     if (!confirm(t("checklists.deleteConfirm"))) return;
     setError(null);
     setDeletingId(id);
+    try {
+      await runWithLoading(async () => {
+        const res = await fetch(`/api/checklists/${id}`, {
+          method: "DELETE",
+          credentials: "include"
+        }).catch(() => null);
 
-    const res = await fetch(`/api/checklists/${id}`, {
-      method: "DELETE",
-      credentials: "include"
-    }).catch(() => null);
-
-    if (!res) {
+        if (!res) { setError(t("checklists.deleteFailed")); return; }
+        if (res.status === 401) {
+          startNavigation();
+          window.location.assign(`/login?next=${encodeURIComponent("/checklists")}`);
+          return;
+        }
+        if (res.status === 403) { setError(t("validation.forbidden")); return; }
+        if (!res.ok) {
+          setError(res.status === 409 ? t("common.deleteConflict") : t("checklists.deleteFailed"));
+          return;
+        }
+        await refresh();
+      }, t("common.deleting"));
+    } finally {
       setDeletingId(null);
-      setError(t("checklists.deleteFailed"));
-      return;
     }
-    if (res.status === 401) {
-      window.location.assign(`/login?next=${encodeURIComponent("/checklists")}`);
-      return;
-    }
-    if (res.status === 403) {
-      setDeletingId(null);
-      setError(t("validation.forbidden"));
-      return;
-    }
-    if (!res.ok) {
-      setDeletingId(null);
-      setError(t("checklists.deleteFailed"));
-      return;
-    }
-
-    setDeletingId(null);
-    await refresh();
   }
 
   return (
@@ -167,7 +167,7 @@ export default function ChecklistsPage() {
                   <td className="px-4 py-3 text-right">
                     <button
                       className="rounded-lg border bg-surface-2 px-2 py-1 text-xs font-medium hover:bg-surface-1 disabled:opacity-60"
-                      disabled={deletingId === c.id}
+                      disabled={deletingId !== null}
                       onClick={() => deleteChecklist(c.id)}
                       title={t("checklists.delete")}
                     >

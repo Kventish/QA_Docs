@@ -5,9 +5,15 @@ import { useEffect, useRef, useState } from "react";
 import { useLocale, useT } from "@/lib/i18n/useT";
 import { runLabels, runErrorLabel } from "@/lib/i18n/dictionaries/run-engine";
 import { durationText, Kind, documentPaths } from "@/lib/run-engine/domain";
+import { useGlobalLoading } from "@/components/loading/GlobalLoadingProvider";
+import { startNavigation } from "@/components/navigation/NavigationProgress";
 
 type ActiveRun = { id: string; startedAt: string; startedByEmailSnapshot: string };
 const documentKeys = { test_case: "testCases", checklist: "checklists", test_plan: "testPlans" } as const;
+
+function StartingLabel({ label }: { label: string }) {
+  return <span className="inline-flex items-center gap-2"><span aria-hidden="true" className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-r-transparent" />{label}</span>;
+}
 
 export default function StartRun({ kind, id, title, status, executableCount, activeRun, serverNow }: {
   kind: Kind; id: string; title: string; status: string; executableCount?: number;
@@ -16,6 +22,7 @@ export default function StartRun({ kind, id, title, status, executableCount, act
   const locale = useLocale();
   const t = useT();
   const r = runLabels[locale];
+  const { startLoading, stopLoading } = useGlobalLoading();
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const key = useRef<string>();
@@ -32,6 +39,7 @@ export default function StartRun({ kind, id, title, status, executableCount, act
   async function start() {
     if (busyRef.current) return;
     busyRef.current = true; setBusy(true); setError("");
+    const loadingToken = startLoading(r.starting);
     const storageKey = `run-start:${kind}:${id}`;
     try {
       key.current = key.current ?? sessionStorage.getItem(storageKey) ?? crypto.randomUUID();
@@ -40,9 +48,10 @@ export default function StartRun({ kind, id, title, status, executableCount, act
       const body = await response.json();
       if (!response.ok) { setError(body.error ?? "serverError"); return; }
       sessionStorage.removeItem(storageKey);
+      startNavigation(r.loading);
       window.location.assign(`/runs/${body.runId}`);
     } catch { setError("network"); }
-    finally { setBusy(false); busyRef.current = false; }
+    finally { stopLoading(loadingToken); setBusy(false); busyRef.current = false; }
   }
 
   const primaryClass = "inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-500 disabled:cursor-not-allowed disabled:opacity-60";
@@ -63,7 +72,7 @@ export default function StartRun({ kind, id, title, status, executableCount, act
         <div><dt className="text-text-muted">{r.duration}</dt><dd className="mt-1 font-mono">{durationText(clock - Date.parse(activeRun.startedAt))}</dd></div>
         <div><dt className="text-text-muted">{r.user}</dt><dd className="mt-1 break-all">{activeRun.startedByEmailSnapshot}</dd></div>
       </dl>
-      <div className="flex flex-wrap gap-3"><Link className={primaryClass} href={`/runs/${activeRun.id}`}>{r.startPage.continueRun}</Link><button className={secondaryClass} disabled={busy} onClick={start}>{busy ? r.loading : r.startPage.startNew}</button></div>
+      <div className="flex flex-wrap gap-3"><Link className={primaryClass} href={`/runs/${activeRun.id}`}>{r.startPage.continueRun}</Link><button type="button" className={secondaryClass} disabled={busy} aria-busy={busy} onClick={start}>{busy ? <StartingLabel label={r.starting} /> : r.startPage.startNew}</button></div>
     </section>}
 
     <section className="space-y-5 rounded-xl border bg-surface-1 p-6 shadow-soft">
@@ -74,7 +83,7 @@ export default function StartRun({ kind, id, title, status, executableCount, act
         <div><dt className="text-text-muted">{r.version}</dt><dd className="mt-1 font-medium">{r.snapshot}</dd></div>
       </dl>
       <div className="flex flex-wrap items-center gap-3">
-        {!activeRun && <button className={primaryClass} disabled={busy} onClick={start}>{busy ? r.loading : r.startPage.startRun}</button>}
+        {!activeRun && <button type="button" className={primaryClass} disabled={busy} aria-busy={busy} onClick={start}>{busy ? <StartingLabel label={r.starting} /> : r.startPage.startRun}</button>}
         <Link className={secondaryClass} href={`${base}/runs`}>{r.history}</Link><Link className={tertiaryClass} href={base}>{r.back}</Link>
       </div>
       {error && <p role="alert" className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-400">{runErrorLabel(error, r)}</p>}

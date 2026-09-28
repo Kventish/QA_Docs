@@ -1,16 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useT, useLocale } from "@/lib/i18n/useT";
+import { useT } from "@/lib/i18n/useT";
 import { ProjectFormSelect } from "@/components/ProjectSelect";
+import { useGlobalLoading } from "@/components/loading/GlobalLoadingProvider";
+import { startNavigation } from "@/components/navigation/NavigationProgress";
 
 type TestCaseLite = { id: string; title: string; status: string; tags: string[] };
 type ChecklistLite = { id: string; title: string; status: string };
 type Project = { id: string; name: string; slug: string };
 
 export default function NewTestPlanPage() {
-  const locale = useLocale();
   const t = useT();
+  const { runWithLoading } = useGlobalLoading();
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState("");
   const [title, setTitle] = useState("");
@@ -20,6 +22,7 @@ export default function NewTestPlanPage() {
   const [tags, setTags] = useState("");
   const [cases, setCases] = useState<TestCaseLite[]>([]);
   const [checklists, setChecklists] = useState<ChecklistLite[]>([]);
+  const [optionsLoading, setOptionsLoading] = useState(false);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [selectedChecklists, setSelectedChecklists] = useState<Record<string, boolean>>({});
   const selectedIds = useMemo(
@@ -50,16 +53,33 @@ export default function NewTestPlanPage() {
     if (!projectId) {
       setCases([]);
       setChecklists([]);
+      setOptionsLoading(false);
       return;
     }
-    fetch(`/api/test-cases?projectId=${encodeURIComponent(projectId)}`, { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => setCases(j?.testCases ?? []))
-      .catch(() => setCases([]));
-    fetch(`/api/checklists?projectId=${encodeURIComponent(projectId)}`, { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => setChecklists(j?.checklists ?? []))
-      .catch(() => setChecklists([]));
+    let alive = true;
+    setOptionsLoading(true);
+    Promise.all([
+      fetch(`/api/test-cases?projectId=${encodeURIComponent(projectId)}`, { credentials: "include" })
+        .then((r) => (r.ok ? r.json() : null)),
+      fetch(`/api/checklists?projectId=${encodeURIComponent(projectId)}`, { credentials: "include" })
+        .then((r) => (r.ok ? r.json() : null))
+    ])
+      .then(([caseJson, checklistJson]) => {
+        if (!alive) return;
+        setCases(caseJson?.testCases ?? []);
+        setChecklists(checklistJson?.checklists ?? []);
+      })
+      .catch(() => {
+        if (!alive) return;
+        setCases([]);
+        setChecklists([]);
+      })
+      .finally(() => {
+        if (alive) setOptionsLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
   }, [projectId]);
 
   function validate(): boolean {
@@ -77,7 +97,7 @@ export default function NewTestPlanPage() {
     if (!validate()) return;
 
     setSaving(true);
-    const res = await fetch("/api/test-plans", {
+    const res = await runWithLoading(() => fetch("/api/test-plans", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -93,7 +113,7 @@ export default function NewTestPlanPage() {
         testCaseIds: selectedIds,
         checklistIds: selectedChecklistIds
       })
-    }).catch(() => null);
+    }).catch(() => null), t("common.creating"));
 
     if (!res) {
       setSaving(false);
@@ -107,6 +127,7 @@ export default function NewTestPlanPage() {
       return;
     }
 
+    startNavigation();
     window.location.assign(`/test-plans/${json?.testPlan?.id ?? ""}`);
   }
 
@@ -137,6 +158,7 @@ export default function NewTestPlanPage() {
             {fieldErrors.projectId ? (
               <p className="text-xs text-red-400">{fieldErrors.projectId}</p>
             ) : null}
+            {optionsLoading ? <p role="status" className="text-xs text-text-muted">{t("common.loading")}</p> : null}
           </div>
 
           <div className="space-y-1">
@@ -252,6 +274,12 @@ export default function NewTestPlanPage() {
                         {t("validation.projectRequired")}.
                       </td>
                     </tr>
+                  ) : optionsLoading ? (
+                    <tr>
+                      <td className="px-4 py-6 text-text-muted" colSpan={3}>
+                        {t("common.loading")}
+                      </td>
+                    </tr>
                   ) : cases.length === 0 ? (
                     <tr>
                       <td className="px-4 py-6 text-text-muted" colSpan={3}>
@@ -319,6 +347,12 @@ export default function NewTestPlanPage() {
                         {t("validation.projectRequired")}.
                       </td>
                     </tr>
+                  ) : optionsLoading ? (
+                    <tr>
+                      <td className="px-4 py-6 text-text-muted" colSpan={3}>
+                        {t("common.loading")}
+                      </td>
+                    </tr>
                   ) : checklists.length === 0 ? (
                     <tr>
                       <td className="px-4 py-6 text-text-muted" colSpan={3}>
@@ -340,8 +374,9 @@ export default function NewTestPlanPage() {
           <button
             className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium hover:bg-brand-500 disabled:opacity-60"
             disabled={saving}
+            aria-busy={saving}
           >
-            {saving ? t("common.loading") : t("common.create")}
+            {saving ? t("common.creating") : t("common.create")}
           </button>
         </form>
       </div>

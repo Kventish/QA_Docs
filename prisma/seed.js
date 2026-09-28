@@ -3,9 +3,20 @@ const { PrismaClient } = require("@prisma/client");
 
 const prisma = new PrismaClient();
 
+function requiredEnv(name) {
+  const value = process.env[name];
+  if (!value || !value.trim()) {
+    throw new Error(`${name} is required`);
+  }
+  return value;
+}
+
 async function main() {
-  const email = process.env.ADMIN_EMAIL || "admin@example.com";
-  const password = process.env.ADMIN_PASSWORD || "admin12345";
+  const email = requiredEnv("ADMIN_EMAIL").trim();
+  const password = requiredEnv("ADMIN_PASSWORD");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error("ADMIN_EMAIL must be a valid email address");
+  }
   const passwordHash = await bcrypt.hash(password, 12);
 
   await prisma.user.upsert({

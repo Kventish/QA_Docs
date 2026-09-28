@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useT } from "@/lib/i18n/useT";
 import { ProjectFormSelect } from "@/components/ProjectSelect";
+import { useGlobalLoading } from "@/components/loading/GlobalLoadingProvider";
+import { startNavigation } from "@/components/navigation/NavigationProgress";
 
 type Item = { text: string; checked: boolean; expectedResult: string };
 type Checklist = {
@@ -41,6 +43,7 @@ export default function EditChecklistPage({ params }: { params: { id: string } }
   const [items, setItems] = useState<Item[]>([{ ...emptyItem }]);
 
   const t = useT();
+  const { runWithLoading } = useGlobalLoading();
 
   useEffect(() => {
     fetch("/api/projects", { credentials: "include" })
@@ -70,6 +73,7 @@ export default function EditChecklistPage({ params }: { params: { id: string } }
       .catch((r) => {
         if (!alive) return;
         if (r?.status === 401) {
+          startNavigation();
           window.location.assign(`/login?next=${encodeURIComponent(`/checklists/${params.id}/edit`)}`);
           return;
         }
@@ -104,7 +108,7 @@ export default function EditChecklistPage({ params }: { params: { id: string } }
     if (!validate()) return;
 
     setSaving(true);
-    const res = await fetch(`/api/checklists/${params.id}`, {
+    const res = await runWithLoading(() => fetch(`/api/checklists/${params.id}`, {
       method: "PATCH",
       credentials: "include",
       headers: { "content-type": "application/json" },
@@ -118,7 +122,7 @@ export default function EditChecklistPage({ params }: { params: { id: string } }
           .filter(Boolean),
         items
       })
-    }).catch(() => null);
+    }).catch(() => null), t("common.saving"));
 
     if (!res) {
       setSaving(false);
@@ -127,6 +131,7 @@ export default function EditChecklistPage({ params }: { params: { id: string } }
     }
     const json = (await res.json().catch(() => null)) as { error?: string };
     if (res.status === 401) {
+      startNavigation();
       window.location.assign(`/login?next=${encodeURIComponent(`/checklists/${params.id}/edit`)}`);
       return;
     }
@@ -141,6 +146,7 @@ export default function EditChecklistPage({ params }: { params: { id: string } }
       return;
     }
 
+    startNavigation();
     window.location.assign(`/checklists/${params.id}`);
   }
 

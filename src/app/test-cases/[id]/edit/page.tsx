@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useT } from "@/lib/i18n/useT";
 import { ProjectFormSelect } from "@/components/ProjectSelect";
+import { useGlobalLoading } from "@/components/loading/GlobalLoadingProvider";
+import { startNavigation } from "@/components/navigation/NavigationProgress";
 
 type EditRow =
   | { type: "step"; step: string; expectedResult: string; actualResult: string }
@@ -76,7 +78,9 @@ export default function EditTestCasePage({ params }: { params: { id: string } })
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [projects, setProjects] = useState<Project[]>([]);
   const [caseOptions, setCaseOptions] = useState<Array<{ id: string; title: string }>>([]);
+  const [caseOptionsLoading, setCaseOptionsLoading] = useState(false);
   const t = useT();
+  const { runWithLoading } = useGlobalLoading();
 
   const [projectId, setProjectId] = useState("");
   const [title, setTitle] = useState("");
@@ -96,9 +100,11 @@ export default function EditTestCasePage({ params }: { params: { id: string } })
   useEffect(() => {
     if (!projectId) {
       setCaseOptions([]);
+      setCaseOptionsLoading(false);
       return;
     }
     let alive = true;
+    setCaseOptionsLoading(true);
     fetch(`/api/test-cases?projectId=${encodeURIComponent(projectId)}`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
@@ -106,7 +112,12 @@ export default function EditTestCasePage({ params }: { params: { id: string } })
         const list = (j?.testCases ?? []) as Array<{ id: string; title: string }>;
         setCaseOptions(list.filter((c) => c.id !== params.id));
       })
-      .catch(() => setCaseOptions([]));
+      .catch(() => {
+        if (alive) setCaseOptions([]);
+      })
+      .finally(() => {
+        if (alive) setCaseOptionsLoading(false);
+      });
     return () => {
       alive = false;
     };
@@ -135,6 +146,7 @@ export default function EditTestCasePage({ params }: { params: { id: string } })
       .catch(async (r) => {
         if (!alive) return;
         if (r?.status === 401) {
+          startNavigation();
           window.location.assign(`/login?next=${encodeURIComponent(`/test-cases/${params.id}/edit`)}`);
           return;
         }
@@ -202,7 +214,7 @@ export default function EditTestCasePage({ params }: { params: { id: string } })
     if (!validate()) return;
 
     setSaving(true);
-    const res = await fetch(`/api/test-cases/${params.id}`, {
+    const res = await runWithLoading(() => fetch(`/api/test-cases/${params.id}`, {
       method: "PATCH",
       credentials: "include",
       headers: { "content-type": "application/json" },
@@ -218,7 +230,7 @@ export default function EditTestCasePage({ params }: { params: { id: string } })
         postconditions,
         steps: serializeSteps(steps)
       })
-    }).catch(() => null);
+    }).catch(() => null), t("common.saving"));
 
     if (!res) {
       setSaving(false);
@@ -227,6 +239,7 @@ export default function EditTestCasePage({ params }: { params: { id: string } })
     }
     const json = (await res.json().catch(() => null)) as { error?: string };
     if (res.status === 401) {
+      startNavigation();
       window.location.assign(`/login?next=${encodeURIComponent(`/test-cases/${params.id}/edit`)}`);
       return;
     }
@@ -241,6 +254,7 @@ export default function EditTestCasePage({ params }: { params: { id: string } })
       return;
     }
 
+    startNavigation();
     window.location.assign(`/test-cases/${params.id}`);
   }
 
@@ -270,6 +284,7 @@ export default function EditTestCasePage({ params }: { params: { id: string } })
               className={`w-full rounded-lg border bg-surface-2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 ${fieldErrors.projectId ? "border-red-500" : ""}`}
             />
             {fieldErrors.projectId ? <p className="text-xs text-red-400">{fieldErrors.projectId}</p> : null}
+            {caseOptionsLoading ? <p role="status" className="text-xs text-text-muted">{t("common.loading")}</p> : null}
           </div>
 
           <div className="space-y-1">
@@ -368,9 +383,10 @@ export default function EditTestCasePage({ params }: { params: { id: string } })
                         <select
                           className="w-full rounded-lg border bg-surface-2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                           value={s.testCaseId}
+                          disabled={caseOptionsLoading}
                           onChange={(e) => updateInclude(idx, e.target.value)}
                         >
-                          <option value="">{t("testCases.form.selectTestCaseToInclude")}</option>
+                          <option value="">{caseOptionsLoading ? t("common.loading") : t("testCases.form.selectTestCaseToInclude")}</option>
                           {caseOptions.map((c) => (
                             <option key={c.id} value={c.id}>
                               {c.title}

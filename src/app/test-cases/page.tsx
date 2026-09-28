@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useLocale, useT } from "@/lib/i18n/useT";
 import { ProjectFilterSelect } from "@/components/ProjectSelect";
+import { useGlobalLoading } from "@/components/loading/GlobalLoadingProvider";
+import { startNavigation } from "@/components/navigation/NavigationProgress";
 
 type TestCase = {
   id: string;
@@ -20,6 +22,7 @@ export default function TestCasesPage() {
   const params = useSearchParams();
   const locale = useLocale();
   const t = useT();
+  const { runWithLoading } = useGlobalLoading();
   const q = (params.get("q") ?? "").trim();
   const status = (params.get("status") ?? "").trim();
   const projectParam = params.get("projectId") ?? "";
@@ -78,6 +81,7 @@ export default function TestCasesPage() {
       .catch(async (r) => {
         if (!alive) return;
         if (r?.status === 401) {
+          startNavigation();
           window.location.assign(`/login?next=${encodeURIComponent("/test-cases")}`);
           return;
         }
@@ -94,13 +98,14 @@ export default function TestCasesPage() {
   }, [projectId, t]);
 
   async function deleteCase(id: string) {
+    if (deletingId !== null) return;
     if (!confirm(t("testCases.deleteConfirm"))) return;
     setError(null);
     setDeletingId(id);
-    const res = await fetch(`/api/test-cases/${id}`, {
+    const res = await runWithLoading(() => fetch(`/api/test-cases/${id}`, {
       method: "DELETE",
       credentials: "include"
-    }).catch(() => null);
+    }).catch(() => null), t("common.deleting"));
 
     if (!res) {
       setDeletingId(null);
@@ -108,6 +113,7 @@ export default function TestCasesPage() {
       return;
     }
     if (res.status === 401) {
+      startNavigation();
       window.location.assign(`/login?next=${encodeURIComponent("/test-cases")}`);
       return;
     }
@@ -118,7 +124,7 @@ export default function TestCasesPage() {
     }
     if (!res.ok) {
       setDeletingId(null);
-      setError(t("testCases.deleteFailed"));
+      setError(res.status === 409 ? t("common.deleteConflict") : t("testCases.deleteFailed"));
       return;
     }
 
@@ -217,7 +223,7 @@ export default function TestCasesPage() {
                   <td className="px-4 py-3 text-right">
                     <button
                       className="rounded-lg border bg-surface-2 px-2 py-1 text-xs font-medium hover:bg-surface-1 disabled:opacity-60"
-                      disabled={deletingId === c.id}
+                      disabled={deletingId !== null}
                       onClick={() => deleteCase(c.id)}
                       title={t("testCases.delete")}
                     >
@@ -254,4 +260,3 @@ export default function TestCasesPage() {
     </div>
   );
 }
-

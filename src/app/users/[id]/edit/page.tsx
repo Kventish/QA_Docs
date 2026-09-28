@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useT } from "@/lib/i18n/useT";
+import { useGlobalLoading } from "@/components/loading/GlobalLoadingProvider";
+import { startNavigation } from "@/components/navigation/NavigationProgress";
 
 type User = {
   id: string;
@@ -13,6 +15,7 @@ type Project = { id: string; name: string; slug: string };
 
 export default function EditUserPage({ params }: { params: { id: string } }) {
   const t = useT();
+  const { runWithLoading } = useGlobalLoading();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +45,7 @@ export default function EditUserPage({ params }: { params: { id: string } }) {
       .catch(async (r) => {
         if (!alive) return;
         if (r?.status === 401) {
+          startNavigation();
           window.location.assign(`/login?next=${encodeURIComponent(`/users/${params.id}/edit`)}`);
           return;
         }
@@ -74,12 +78,12 @@ export default function EditUserPage({ params }: { params: { id: string } }) {
     if (password.trim()) payload.password = password.trim();
     if (role === "viewer") payload.projectIds = projectIds;
 
-    const res = await fetch(`/api/users/${user.id}`, {
+    const res = await runWithLoading(() => fetch(`/api/users/${user.id}`, {
       method: "PATCH",
       credentials: "include",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload)
-    }).catch(() => null);
+    }).catch(() => null), t("common.saving"));
 
     if (!res) {
       setSaving(false);
@@ -87,6 +91,7 @@ export default function EditUserPage({ params }: { params: { id: string } }) {
       return;
     }
     if (res.status === 401) {
+      startNavigation();
       window.location.assign(`/login?next=${encodeURIComponent(`/users/${params.id}/edit`)}`);
       return;
     }
@@ -101,6 +106,7 @@ export default function EditUserPage({ params }: { params: { id: string } }) {
     setUser(j?.user ?? user);
     setPassword("");
     setSaving(false);
+    startNavigation();
     window.location.assign("/users");
   }
 
@@ -184,8 +190,9 @@ export default function EditUserPage({ params }: { params: { id: string } }) {
             <button
               className="flex-1 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium hover:bg-brand-500 disabled:opacity-60"
               disabled={saving}
+              aria-busy={saving}
             >
-              {saving ? t("common.loading") : t("common.save")}
+              {saving ? t("common.saving") : t("common.save")}
             </button>
             <a
               className="rounded-lg border bg-surface-2 px-3 py-2 text-sm font-medium hover:bg-surface-1"
@@ -199,4 +206,3 @@ export default function EditUserPage({ params }: { params: { id: string } }) {
     </div>
   );
 }
-

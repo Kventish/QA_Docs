@@ -6,6 +6,7 @@ import { LocaleProvider } from "@/lib/i18n/useT";
 import { getServerLocale } from "@/lib/i18n/getServerLocale";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import { GlobalLoadingProvider } from "@/components/loading/GlobalLoadingProvider";
 
 const inter = Inter({ subsets: ["latin", "cyrillic"] });
 
@@ -21,9 +22,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang={locale}>
       <body className={inter.className}>
         <LocaleProvider initialLocale={locale}>
-          <AppShell>{children}</AppShell>
-          <Analytics />
-          <SpeedInsights />
+          <GlobalLoadingProvider>
+            <AppShell>{children}</AppShell>
+            <Analytics />
+            <SpeedInsights />
+          </GlobalLoadingProvider>
         </LocaleProvider>
       </body>
     </html>

@@ -8,8 +8,13 @@ WORKDIR /app
 RUN apk add --no-cache openssl
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npx prisma generate
-RUN npm run build
+RUN DATABASE_URL="postgresql://postgres:postgres@db:5432/qadocs?schema=public" \
+    DIRECT_URL="postgresql://postgres:postgres@db:5432/qadocs?schema=public" \
+    npx prisma generate
+RUN DATABASE_URL="postgresql://postgres:postgres@db:5432/qadocs?schema=public" \
+    DIRECT_URL="postgresql://postgres:postgres@db:5432/qadocs?schema=public" \
+    AUTH_SECRET="docker-build-placeholder-not-for-runtime" \
+    npm run build
 
 FROM node:20-alpine AS runner
 WORKDIR /app
@@ -32,4 +37,3 @@ RUN chown -R app:app /app
 USER app
 EXPOSE 3000
 CMD ["./docker-entrypoint.sh"]
-

@@ -1,11 +1,14 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useT } from "@/lib/i18n/useT";
+import { useGlobalLoading } from "@/components/loading/GlobalLoadingProvider";
+import { startNavigation } from "@/components/navigation/NavigationProgress";
 
 export default function LoginPage() {
   const t = useT();
+  const { runWithLoading } = useGlobalLoading();
   const params = useSearchParams();
   const nextPath = useMemo(() => params.get("next") || "/projects", [params]);
 
@@ -13,37 +16,45 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const loadingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
     setError(null);
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email, password })
-    }).catch(() => null);
+    try {
+      await runWithLoading(async () => {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email, password })
+        }).catch(() => null);
 
-    if (!res || !res.ok) {
+        if (!res || !res.ok) {
+          setError(t("auth.invalidCredentials"));
+          return;
+        }
+
+        const sessionRes = await fetch("/api/auth/session", {
+          cache: "no-store",
+          credentials: "include"
+        }).catch(() => null);
+        const sessionJson = sessionRes?.ok ? await sessionRes.json().catch(() => null) : null;
+        if (!sessionJson?.session) {
+          setError(t("auth.sessionMissing"));
+          return;
+        }
+
+        startNavigation(t("common.loading"));
+        window.location.assign(nextPath);
+      }, t("common.loading"));
+    } finally {
+      loadingRef.current = false;
       setLoading(false);
-      setError(t("auth.invalidCredentials"));
-      return;
     }
-
-    // Sanity check: session cookie must be readable server-side; if not, show a clear hint.
-    const sessionRes = await fetch("/api/auth/session", {
-      cache: "no-store",
-      credentials: "include"
-    }).catch(() => null);
-    const sessionJson = sessionRes?.ok ? await sessionRes.json().catch(() => null) : null;
-    if (!sessionJson?.session) {
-      setLoading(false);
-      setError(t("auth.sessionMissing"));
-      return;
-    }
-
-    window.location.assign(nextPath);
   }
 
   return (
@@ -105,4 +116,3 @@ export default function LoginPage() {
     </div>
   );
 }
-

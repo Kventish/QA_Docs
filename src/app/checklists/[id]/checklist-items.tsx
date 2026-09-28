@@ -36,7 +36,7 @@ export default function ChecklistItems({
   }
 
   return (
-    <div className="mt-3">
+    <div className="mt-3" aria-busy={updating}>
       {items.length ? (
         <div className="overflow-hidden rounded-xl border border-surface-2">
           <table className="w-full text-sm">
@@ -72,6 +72,7 @@ export default function ChecklistItems({
       ) : (
         <div className="text-sm text-text-muted">{t("checklists.emptyText")}</div>
       )}
+      {updating && <p className="mt-2 text-xs text-text-muted" role="status">{t("common.saving")}</p>}
     </div>
   );
 }

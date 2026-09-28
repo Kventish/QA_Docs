@@ -2,11 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useT } from "@/lib/i18n/useT";
+import { useGlobalLoading } from "@/components/loading/GlobalLoadingProvider";
+import { startNavigation } from "@/components/navigation/NavigationProgress";
 
 type Project = { id: string; name: string; slug: string };
 
 export default function NewUserPage() {
   const t = useT();
+  const { runWithLoading } = useGlobalLoading();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"admin" | "editor" | "viewer">("viewer");
@@ -32,11 +35,11 @@ export default function NewUserPage() {
       role
     };
     if (role === "viewer") payload.projectIds = projectIds;
-    const res = await fetch("/api/users", {
+    const res = await runWithLoading(() => fetch("/api/users", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload)
-    }).catch(() => null);
+    }).catch(() => null), t("common.creating"));
 
     if (!res || !res.ok) {
       setSaving(false);
@@ -44,6 +47,7 @@ export default function NewUserPage() {
       return;
     }
 
+    startNavigation();
     window.location.assign("/users");
   }
 
@@ -122,12 +126,12 @@ export default function NewUserPage() {
           <button
             className="w-full rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium hover:bg-brand-500 disabled:opacity-60"
             disabled={saving}
+            aria-busy={saving}
           >
-            {saving ? t("common.loading") : t("common.create")}
+            {saving ? t("common.creating") : t("common.create")}
           </button>
         </form>
       </div>
     </div>
   );
 }
-

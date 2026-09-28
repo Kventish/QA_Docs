@@ -1,4 +1,5 @@
 export type Result = "passed" | "failed" | "questionable";
+export type StepResult = Result | "blocked";
 export type ExecutionSeverity = "low" | "medium" | "high" | "critical";
 export type Kind = "test_case" | "checklist" | "test_plan";
 export type Lifecycle = "in_progress" | "completed" | "cancelled";
@@ -41,14 +42,14 @@ export function leafSteps(steps: SnapshotStep[]): SnapshotStep[] {
   return steps.flatMap(step => step.children.length ? leafSteps(step.children) : [step]);
 }
 
-export function calculateStatus(results: (Result | null)[]): Result | null {
+export function calculateStatus(results: (StepResult | null)[]): Result | null {
   if (results.includes("failed")) return "failed";
-  if (results.includes("questionable")) return "questionable";
+  if (results.includes("questionable") || results.includes("blocked")) return "questionable";
   return results.length > 0 && results.every(result => result === "passed") ? "passed" : null;
 }
 
-export function executionSeverity(result: Result | null, severity: ExecutionSeverity | null): ExecutionSeverity | null {
-  if (result === "passed" || result === null) return null;
+export function executionSeverity(result: StepResult | null, severity: ExecutionSeverity | null): ExecutionSeverity | null {
+  if (result === "passed" || result === "blocked" || result === null) return null;
   if (result === "failed" && severity === null) throw new RunError("severityRequired");
   return severity;
 }
