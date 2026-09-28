@@ -9,6 +9,10 @@ import { useLocale } from "@/lib/i18n/useT";
 import { runLabels, runErrorLabel, RunLabels } from "@/lib/i18n/dictionaries/run-engine";
 import { startNavigation } from "@/components/navigation/NavigationProgress";
 import { useGlobalLoading } from "@/components/loading/GlobalLoadingProvider";
+import {
+  GLOBAL_BACK_REQUEST_EVENT,
+  type GlobalBackRequestDetail
+} from "@/components/navigation/GlobalBackButton";
 
 const inputClass = "mt-1 w-full rounded-lg border bg-surface-2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
 const buttonClass = "inline-flex items-center justify-center rounded-lg border bg-surface-2 px-3 py-2 text-sm font-medium hover:bg-surface-1 disabled:cursor-not-allowed disabled:opacity-50";
@@ -418,27 +422,46 @@ export default function RunWorkspace({ runId }: { runId: string }) {
     }
   }, [aggregateMutation, cancelReason, r.cancelDiscardWarning, r.cancelling, startLoading, stopLoading]);
 
-  const navigateSafely = useCallback(async (path: string) => {
+  const navigateSafely = useCallback(async (path: string, beforePush?: () => void): Promise<boolean> => {
+    if (aggregateBusyRef.current) return false;
     const current = runRef.current;
-    if (!current) return;
+    if (!current) return false;
     const handles = [...saveHandles.current.values()];
     if (current.lifecycle === "in_progress" && current.canEdit
       && handles.some(handle => handle.needsDiscard())
-      && !confirm(r.navigateDiscardWarning)) return;
+      && !confirm(r.navigateDiscardWarning)) return false;
     const loadingToken = startLoading(r.loading);
     try {
       if (current.lifecycle === "in_progress" && current.canEdit) {
         const preparations = await Promise.all(handles.map(handle => handle.prepareCancel()));
         if (preparations.includes("error")) {
           setError("autosaveFailed");
-          return;
+          return false;
         }
       }
+      beforePush?.();
       push(path);
+      return true;
     } finally {
       stopLoading(loadingToken);
     }
   }, [push, r.loading, r.navigateDiscardWarning, startLoading, stopLoading]);
+
+  useEffect(() => {
+    const onGlobalBack = (event: Event) => {
+      if (!(event instanceof CustomEvent)) return;
+      const detail = event.detail as GlobalBackRequestDetail | undefined;
+      if (!detail || typeof detail.target !== "string" || typeof detail.commit !== "function" || typeof detail.release !== "function") return;
+
+      event.preventDefault();
+      void navigateSafely(detail.target, detail.commit)
+        .then(navigated => { if (!navigated) detail.release(); })
+        .catch(() => detail.release());
+    };
+
+    window.addEventListener(GLOBAL_BACK_REQUEST_EVENT, onGlobalBack);
+    return () => window.removeEventListener(GLOBAL_BACK_REQUEST_EVENT, onGlobalBack);
+  }, [navigateSafely]);
 
   const openNextPlanItem = useCallback(async () => {
     const context = runRef.current?.planContext;
